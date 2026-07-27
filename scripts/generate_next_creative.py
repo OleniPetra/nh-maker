@@ -49,7 +49,7 @@ import requests
 from jsonschema import Draft7Validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL = "anthropic/claude-haiku-4.5"  # быстрее и втрое дешевле sonnet-4.6, всё ещё Anthropic
+DEFAULT_MODEL = "anthropic/claude-sonnet-5"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 MODES = {
@@ -292,6 +292,9 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
             "model": model,
             "messages": messages,
             "temperature": 0.6,
+            "max_tokens": 4096,  # actual output is one JSON brief (~1-3k tokens); without this,
+            # OpenRouter reserves a model-specific default (65536 for Sonnet 5) and refuses the
+            # request if the account can't cover that reservation, even though real usage is tiny.
             "response_format": {"type": "json_object"},
         }
         resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=180)
