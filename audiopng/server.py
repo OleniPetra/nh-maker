@@ -381,16 +381,25 @@ async def generate_creative(
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
 
+SAVEZONE_SHAPES = {
+    "upload": (UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H),   # 🖼️ Upload 3:4 — 3:4 save-zone
+    "aigen": (AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H),      # ✨ AI Gen retry — 4:5 save-zone
+}
+
 @router.post("/api/outpaint-upload")
-async def outpaint_upload(file: UploadFile = File(...)):
-    """Take an uploaded 3:4 creative and outpaint its background top/bottom to the shared
-    720x1280 working canvas — same _run_outpaint() pipeline as generate-creative, just a
-    different save-zone shape (3:4 instead of 4:5), minus the text-to-image step.
-    Returns {url, outpaint_method}."""
+async def outpaint_upload(file: UploadFile = File(...), savezone: str = Form("upload")):
+    """Take an uploaded save-zone creative and outpaint its background top/bottom to the shared
+    720x1280 working canvas — same _run_outpaint() pipeline as generate-creative, minus the
+    text-to-image step. `savezone` selects the input shape: "upload" (3:4, the normal Upload
+    3:4 flow) or "aigen" (4:5, used when retrying just the outpaint step on an AI Gen save-zone
+    without re-running the paid generation). Returns {url, outpaint_method}."""
     _require_fal_key()
+    if savezone not in SAVEZONE_SHAPES:
+        raise HTTPException(400, f"Unknown savezone: {savezone}")
+    savezone_w, savezone_h = SAVEZONE_SHAPES[savezone]
     content = await file.read()
     async with httpx.AsyncClient(timeout=180) as client:
-        final_url, method = await _run_outpaint(client, content, UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H)
+        final_url, method = await _run_outpaint(client, content, savezone_w, savezone_h)
     return {"url": final_url, "outpaint_method": method}
 
 # Статика (templates/, static/index.html+ffmpeg) монтируется в unified_server.py
