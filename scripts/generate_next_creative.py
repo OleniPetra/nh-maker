@@ -2,7 +2,7 @@
 """
 Берёт все обработанные креативы одного branch из db/creatives.db (со всеми их
 text_blocks/композицией/цветом/структурой и оценкой 1-3, плюс marketer_element_feedback
-там, где есть) и одним лёгким запросом к LLM собирает: новую 9:16 концепцию с реальным
+там, где есть) и одним лёгким запросом к LLM собирает: новую вертикальную концепцию с реальным
 копирайтом, компактный 3-частный резонинг (что переиспользовано, чего избегали, что
 придумано новое и почему) и ОДИН промпт для генерации изображения — какой именно,
 зависит от --mode:
@@ -14,7 +14,8 @@ text_blocks/композицией/цветом/структурой и оцен
 избыточно тяжело и медленно. Теперь запрос лёгкий и просит только то, что нужно.
 
 Чтобы новые концепции не повторялись между запусками, скрипт подтягивает историю всех
-предыдущих брифов этого branch (нишу, архетип, структуру, коннектор, фон) из
+предыдущих брифов этого branch — только идею (нишу + однострочную концепцию, без
+архетипа/структуры/коннектора/фона — это раздувало контекст ненужными деталями) — из
 generated_briefs и явно просит модель НЕ конвергировать на одном и том же выигрышном
 паттерне каждый раз — это портфель экспериментов, а не единственный правильный ответ.
 После получения ответа скрипт также проверяет target_audience_niche на схожесть с уже
@@ -50,28 +51,25 @@ MODES = {
 }
 
 # Based on OpenAI's and Google Cloud's public prompting guides for GPT Image 2 /
-# Nano Banana 2 (July 2026, see chat). No pixel dimensions — canvas and proportions
-# are described in plain, natural language. Kept in English: these models are most
-# reliably steered in English regardless of the target audience's language.
+# Nano Banana 2 (July 2026, see chat). No pixel dimensions or aspect-ratio talk —
+# that's already set via the generation API parameters, not the prompt text — canvas
+# is just "a vertical creative". Kept in English: these models are most reliably
+# steered in English regardless of the target audience's language. The Nexera-logo/
+# disclaimer rule lives once in the system prompt (item 4) — not repeated here.
 MODE_RULES = {
     "gpt_image_2": """
 ## How to write image_prompt_gpt_image_2 (GPT Image 2 rules)
 - Write in vivid, natural descriptive prose — not a technical spec sheet.
   Order of thought: background/scene -> main subject -> key details -> what stays
   fixed. Short paragraphs are fine; avoid dry "CONSTRAINTS:"-style bullet blocks.
-- Describe the canvas in words: "a tall vertical phone-screen format, 9:16", and
-  describe the top/middle/bottom sections proportionally ("in the top fifth of
-  the frame", "centered, taking up most of the height") — never pixel values.
+- Describe the canvas as a vertical creative, and describe the top/middle/bottom
+  sections proportionally ("in the top fifth of the frame", "centered, taking up
+  most of the height") — never pixel values or aspect ratios (already set via the
+  generation parameters).
 - Any literal on-image text goes in quotes, with the font/color/placement
   described right next to it in plain language.
 - Don't overload the prompt with pseudo-camera jargon (lens, film stock) — those
   are for mood/composition, not for pixel-level precision.
-- Simply never describe a brand logo/wordmark or a legal trademark disclaimer as
-  part of the scene — the designer adds those as a separate layer after
-  generation. Do NOT add an explicit negative instruction like "no logo" to the
-  prompt text itself: image models respond to positive, complete descriptions of
-  what should appear, and naming an element to exclude often makes it more
-  likely to show up anyway. The fix is silence, not prohibition.
 """,
     "nano_banana_2": """
 ## How to write image_prompt_nano_banana_2 (Nano Banana 2 / Gemini rules)
@@ -83,22 +81,17 @@ MODE_RULES = {
   sentences.
 - Describe the frame format in words ("a tall vertical frame, like a phone
   screen"), and section proportions in words too ("the upper part of the
-  frame", "the bottom fifth") — no pixel sizes. The 9:16 aspect ratio can be
-  mentioned once as a short trailing phrase.
+  frame", "the bottom fifth") — no pixel sizes or aspect ratios (already set via
+  the generation parameters).
 - Literal text goes in quotes, with the font/effect described in the same
   sentence.
-- Same rule as GPT Image 2: never describe a brand logo/wordmark or a legal
-  disclaimer, and never write a negative "no logo" instruction either — just
-  never bring it up.
 """,
     "universal": """
 ## How to write universal_prompt (model-agnostic)
 - A shorter, plain descriptive prompt not tuned to any single model's quirks —
   a solid general-purpose starting point.
-- Natural prose, proportions in words, no pixel sizes.
+- Natural prose, proportions in words, no pixel sizes or aspect ratios.
 - Literal text in quotes with typography noted alongside.
-- Never mention a brand logo/wordmark or legal disclaimer — omit silently, no
-  negative instructions.
 """,
 }
 
@@ -164,18 +157,16 @@ def load_brief_history(db_path: Path, branch: str):
         (branch,),
     ).fetchall()
     conn.close()
+    # Только идея (ниша + однострочная концепция) — раньше сюда же тянулись archetype/
+    # structure_type/connector_style/background_texture, что раздувало контекст ненужными
+    # деталями. Для анти-повтора достаточно знать, какие идеи уже были опробованы.
     history = []
     for brief_id, output_json in rows:
         d = json.loads(output_json)
-        spec = d.get("design_spec", {})
         history.append({
             "brief_id": brief_id,
             "niche": d.get("target_audience_niche", ""),
-            "headline": d.get("new_creative_copy", {}).get("main_headline", ""),
-            "archetype": spec.get("creative_archetype", ""),
-            "structure_type": spec.get("structure_type", ""),
-            "connector_style": spec.get("connector_style", ""),
-            "background_texture": spec.get("background_texture", []),
+            "concept_summary": d.get("concept_summary", ""),
         })
     return history
 
@@ -205,16 +196,10 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
                           history: list, mode: str, hint: str, mode_schema: dict,
                           max_retries: int) -> dict:
     if history:
-        history_lines = "\n".join(
-            f"- niche: '{h['niche']}' | archetype: {h['archetype']} | structure: {h['structure_type']} | "
-            f"connector: {h['connector_style']} | background: {h['background_texture']}"
-            for h in history
-        )
+        history_lines = "\n".join(f"- {h['niche']}: {h['concept_summary']}" for h in history)
         history_block = (
-            "\n\nCONCEPTS ALREADY GENERATED for this branch (do not repeat the niche, and "
-            "treat this as a portfolio of experiments, not one optimal answer — deliberately "
-            "vary structure_type, connector_style, background_texture and archetype away from "
-            f"what's already been tried unless you have a specific reason to repeat it):\n{history_lines}\n"
+            "\n\nIDEAS ALREADY GENERATED for this branch — don't repeat these niches/concepts, "
+            f"treat this as a portfolio of experiments, not one optimal answer:\n{history_lines}\n"
         )
     else:
         history_block = ""
@@ -239,14 +224,13 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
         "Deliberately introduce at least one genuinely new structural or visual "
         "choice this run (see history below) and say what it is and why in "
         "reasoning.new_experiment.\n"
-        "3. Assemble a NEW 9:16 vertical creative concept with real final copy (no "
+        "3. Assemble a NEW vertical creative concept with real final copy (no "
         f"placeholders) and explicitly state target_audience_niche.{history_block}"
         f"{hint_block}\n"
-        "4. IMPORTANT CONSTRAINT: the brand logo/wordmark and the legal trademark "
-        "disclaimer are added by the designer as a separate layer AFTER image "
-        "generation. Never bring them up anywhere — not in the image prompt, not in "
-        "new_creative_copy. Do not add a negative instruction about them either — "
-        "just omit them from the scene description entirely.\n"
+        "4. Never add the Nexera logo or the small-print AI disclaimer to the image "
+        "prompt or the copy — the designer adds those separately afterward. "
+        "Third-party app/tool logos and names (e.g. ChatGPT, Notion, Slack) ARE "
+        "allowed and often a strong hook — only Nexera's own branding is excluded.\n"
         f"5. Write ONE ready-to-use image-generation prompt for mode='{mode}'. Follow "
         f"its rules literally:\n{MODE_RULES[mode]}\n"
         "6. Fill `reasoning` with three SHORT entries (1-3 sentences each, not a "
