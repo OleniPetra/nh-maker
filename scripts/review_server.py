@@ -37,7 +37,7 @@ import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -368,8 +368,13 @@ def _serve_bytes(data: bytes, content_type: str) -> Response:
     return Response(content=data, media_type=content_type)
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def index():
+    return RedirectResponse(url="/audiopng/")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
     return UI_HTML_PATH.read_text(encoding="utf-8")
 
 

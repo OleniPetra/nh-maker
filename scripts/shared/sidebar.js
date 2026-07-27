@@ -74,7 +74,7 @@
     if (typeof window.showPage === "function") {
       window.showPage(item.id);
     } else {
-      location.href = "/#" + item.id;
+      location.href = "/dashboard#" + item.id;
     }
   }
 
