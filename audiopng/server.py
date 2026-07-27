@@ -13,7 +13,7 @@ import httpx
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from PIL import Image, ImageDraw, ImageStat, ImageFilter
+from PIL import Image, ImageStat
 import aiofiles
 
 BASE = Path(__file__).resolve().parent
@@ -28,11 +28,11 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 router = APIRouter(prefix="/audiopng")
 
 # ── Ad-creative pipeline: generate/upload a save-zone image, then outpaint the ──
-# background top/bottom via Flux Fill to a compact 720x1280 (9:16) working canvas.
-# All text/graphics from the save-zone stay inside the untouched center band, so
-# nothing ends up in the newly-painted top/bottom strips.
+# background top/bottom to a compact 720x1280 (9:16) working canvas. All text/graphics
+# from the save-zone stay inside the untouched center band, so nothing ends up in the
+# newly-painted top/bottom strips.
 #
-# Flux Fill runs at this smaller 720-wide working resolution (not the final 1080x1920
+# Outpaint runs at this smaller 720-wide working resolution (not the final 1080x1920
 # delivery size) for speed/cost — the frontend then applies a deterministic artificial
 # upscale to 1080x1920 (see normalizeTo1080x1920 in static/index.html), reused via the
 # same addImages()/finalizeEntry() path for BOTH flows below, so this resize happens
@@ -43,41 +43,16 @@ OUTPAINT_W, OUTPAINT_H = 720, 1280
 AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H = 720, 900     # ✨ AI Gen save-zone — 4:5
 UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H = 720, 960   # 🖼️ Upload 3:4 save-zone — 3:4
 
-FLUX_FILL_URL = "https://fal.run/fal-ai/flux-pro/v1/fill"
+# Purpose-built outpaint model: whole image in, just say how many px to add top/bottom — no
+# mask, no prompt, one call for both edges at once. Replaced the old flux-pro/v1/fill pipeline
+# (masked per-edge crops + a hand-tuned "don't invent content" prompt) because this one simply
+# doesn't invent content in the first place — no prompt to get wrong, no mask math to tune.
+FLUX2_OUTPAINT_URL = "https://fal.run/fal-ai/flux-2-pro/outpaint"
+FLUX2_OUTPAINT_MODE = "fast"
 
-# Flux Fill has no negative_prompt field, so "don't add X" only works as a strong positive
-# framing. Left unchecked, it tends to notice ad-layout content right at the mask seam (a bold
-# headline/footer band touching the crop edge) and "continue the design" with more fabricated
-# headlines/icons instead of plain background. Two mitigations: (1) ask the save-zone generator
-# to leave a plain margin at the very top/bottom so the seam borders clean background, not text,
-# and (2) frame the outpaint prompt as a photographic backdrop extension, not a design continuation.
-SAVEZONE_MARGIN_PX = 100
-SAVEZONE_MARGIN_INSTRUCTION = (
-    f" Composition constraint: leave the outermost ~{SAVEZONE_MARGIN_PX}px strip along the very top "
-    "and very bottom edges of the frame as plain, uncluttered background (no text, headline, logo, "
-    "icon, or UI element touching those edges) — the image will be extended vertically afterward."
-)
-
-# NOTE: deliberately avoids ANY concrete noun — "text", "logo", "watermark", "icon", and even
-# innocuous scene words like "wall", "surface", "room", "sky" have each independently been observed
-# to make Flux render that literal thing (a fence/wall texture, fabricated captions, etc.), whether
-# they were listed as forbidden or as a descriptive example. Flux is a strong content renderer and
-# treats prompt nouns as generation targets almost regardless of framing. The only vocabulary safe to
-# use is abstract, non-renderable qualities: color, tone, texture, blend, gradient, continuity.
-OUTPAINT_PROMPT = (
-    "A smooth, seamless, gradual continuation of the exact colors, tones and soft texture visible right "
-    "at the border of this image, blending outward into the new space with no interruption — same "
-    "palette, same softness, same gradual shading throughout. Do not repeat, mirror, or continue any "
-    "nearby arrangement or repeating pattern — purely a smooth, uniform color and texture continuation, "
-    "nothing structured or distinct from what is already there."
-)
-
-# Flux Fill is trained mostly on photographs — asking it to extend a FLAT/solid or gradient design
-# background (as in a vector infographic or card) is out-of-distribution and can degrade to solid
-# black instead of a continuation. When the source edges are already near-flat, a deterministic
-# edge-stretch (see _make_edge_strip / _run_outpaint) is strictly better: free, instant, zero risk of
-# hallucinated content, and pixel-perfect for a solid/gradient background. Only call the paid AI
-# outpaint model when the edges actually carry photographic texture worth continuing intelligently.
+# Photographic/textured edges go through flux-2-pro/outpaint above; flat/solid/gradient design
+# backgrounds (vector infographics, cards) are cheaper and safer to extend with a deterministic
+# stretch — free, instant, zero risk of hallucinated content, pixel-perfect on a flat source.
 FLAT_EDGE_STDEV_THRESHOLD = 8.0
 EDGE_BAND_PX = 10  # sample a small band, not a single pixel row — one stray icon/star shouldn't flip the verdict
 
@@ -91,23 +66,21 @@ def _band_stats(img: Image.Image, y_center: int, band: int = EDGE_BAND_PX) -> tu
     stddev = sum(stat.stddev) / len(stat.stddev)
     return mean, stddev
 
-# Residual safety net only — see _flux_fill_edge. The real fix is generation quality (focused
-# crops + feathered mask below), not this check; it should rarely trigger once that's working.
-DARKENING_RATIO_THRESHOLD = 0.5   # painted strip is "degenerate" if under half as bright as the source edge
-DEGENERATE_ABS_MEAN_FLOOR = 12.0  # absolute floor — catches literal black even if the source itself is dark
-
-# Save-zone generators: each returns a FAL request payload for the given prompt.
+# Save-zone generators: each returns a FAL request payload for the given prompt. Prompt is
+# passed through exactly as typed — no appended instructions (a "leave a plain margin" hint
+# here didn't measurably change what the models produced; flux-2-pro/outpaint's expand_top/
+# expand_bottom approach doesn't need a clean margin the way the old masked-fill approach did).
 SAVEZONE_MODELS = {
     "nano-banana-2": {
         "name": "Nano Banana 2",
         "t2i": "https://fal.run/fal-ai/nano-banana-2",
-        "payload": lambda prompt: {"prompt": prompt + SAVEZONE_MARGIN_INSTRUCTION, "aspect_ratio": "4:5", "resolution": "1K"},
+        "payload": lambda prompt: {"prompt": prompt, "aspect_ratio": "4:5", "resolution": "1K"},
     },
     "gpt-image-2": {
         "name": "GPT Image 2",
         "t2i": "https://fal.run/openai/gpt-image-2",
-        # width/height must be multiples of 16; closest to 1080x1350 (4:5) — exact-cropped server-side after.
-        "payload": lambda prompt: {"prompt": prompt + SAVEZONE_MARGIN_INSTRUCTION, "image_size": {"width": 1088, "height": 1360}, "quality": "high"},
+        # width/height must be multiples of 16; closest to 1080x1350 (4:5) — exact-resized server-side after.
+        "payload": lambda prompt: {"prompt": prompt, "image_size": {"width": 1088, "height": 1360}, "quality": "high"},
     },
 }
 
@@ -186,131 +159,24 @@ def _extract_image_url(data: dict) -> str | None:
         return data["images"][0].get("url")
     return None
 
-EDGE_SOURCE_BAND_PX = 40  # sample a band, not a single pixel row
-EDGE_BLUR_RADIUS = 40     # smooths busy edges (icons, objects) into a soft wash instead of hard "barcode" stripes
-EDGE_DOWNSCALE_PX = 24    # collapse horizontally too before blowing back up — kills fine vertical banding
+EDGE_SOURCE_BAND_PX = 3  # "растягиваем первые 3 пикселя по краям" — thin strip, no blur needed
 
 def _make_edge_strip(img: Image.Image, band_y0: int, height: int) -> Image.Image:
-    """Soft, blurred stretch of a source edge band to fill `height` px above/below the image.
-    Blurring (and horizontally downscaling) the band before collapsing it to one row avoids the
-    hard vertical-stripe ('barcode') artifact that a literal 1px-row stretch produces on busy/
-    detailed edges (icons, small objects, etc.)."""
+    """Stretch the outermost EDGE_SOURCE_BAND_PX rows to fill `height` px above/below the image —
+    the free/deterministic path for flat/solid/gradient backgrounds (see _run_outpaint)."""
     band_y0 = max(0, min(band_y0, img.height - EDGE_SOURCE_BAND_PX))
     band = img.crop((0, band_y0, img.width, band_y0 + EDGE_SOURCE_BAND_PX))
-    band = band.filter(ImageFilter.GaussianBlur(radius=EDGE_BLUR_RADIUS))
-    # Downscale-then-upscale horizontally acts as an extra low-pass filter on top of the blur,
-    # so tightly-packed small objects (a row of pencils/icons) don't survive as visible bands.
-    small = band.resize((EDGE_DOWNSCALE_PX, 1), Image.LANCZOS)
-    row = small.resize((img.width, 1), Image.LANCZOS)
-    return row.resize((img.width, height), Image.LANCZOS)
-
-# ── Outpaint via two focused per-edge crops instead of one huge portrait canvas ──
-# A 1080x1920 canvas with a 285px masked strip gives Flux very little effective resolution/
-# attention on the region that actually needs generating, and pushes an unusually tall aspect
-# ratio that Flux silently downscales internally (observed: it returned 800x1440 for a 1080x1920
-# request), losing even more of the little detail it had. Splitting into two compact top/bottom
-# crops — each a much more "normal" aspect ratio, each with a feathered (not hard-edged) mask —
-# keeps the model in a comfortable regime and gives it real pixel density on the busy/detailed
-# edges (small icons, objects) it was failing on. This is the actual generation-quality fix; the
-# darkening check below is a thin residual safety net, not the fix itself.
-# Context window (real, unmasked save-zone content given to Flux as an anchor) is kept
-# proportional to expand_px, NOT a fixed pixel count: a wider window relative to the masked
-# region gives Flux enough visual evidence to recognize "this is a repeating layout" (e.g. a
-# card/window edge, an icon+caption row) and fabricate a continuation of it — a fake header,
-# nav bar, logo, garbled text — instead of extending plain background. This ratio (roughly
-# half the masked height) is what keeps that from happening; it must scale with expand_px,
-# since a fixed context size silently drifts toward 1:1 (and the failure mode above) whenever
-# expand_px shrinks (e.g. a smaller working resolution) — a bug we hit in practice.
-OUTPAINT_CONTEXT_RATIO = 0.5
-OUTPAINT_CONTEXT_MIN_PX = 48  # floor so a very small expand_px still carries a usable anchor
-MASK_FEATHER_PX = 32          # soft gradient at the mask boundary instead of a hard cut
-
-def _build_edge_crop(img: Image.Image, top: bool, expand_px: int) -> tuple[Image.Image, Image.Image]:
-    """Small working canvas + feathered mask for outpainting ONE edge (top or bottom)."""
-    w = img.width
-    context_px = max(OUTPAINT_CONTEXT_MIN_PX, round(expand_px * OUTPAINT_CONTEXT_RATIO))
-    context = img.crop((0, 0, w, context_px)) if top \
-        else img.crop((0, img.height - context_px, w, img.height))
-    placeholder = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, expand_px)
-    crop_h = expand_px + context_px
-
-    canvas = Image.new("RGB", (w, crop_h))
-    mask = Image.new("L", (w, crop_h), 0)
-    draw = ImageDraw.Draw(mask)
-    if top:
-        canvas.paste(placeholder, (0, 0))
-        canvas.paste(context, (0, expand_px))
-        draw.rectangle([0, 0, w, expand_px], fill=255)
-    else:
-        canvas.paste(context, (0, 0))
-        canvas.paste(placeholder, (0, context_px))
-        draw.rectangle([0, context_px, w, crop_h], fill=255)
-
-    mask = mask.filter(ImageFilter.GaussianBlur(radius=MASK_FEATHER_PX))
-    return canvas, mask
-
-async def _flux_fill_edge(client: httpx.AsyncClient, img: Image.Image, top: bool, source_mean: float, expand_px: int) -> tuple[Image.Image, str]:
-    """Outpaint ONE edge via Flux Fill on a focused crop. Returns (painted expand_px-tall strip, method)."""
-    label = "top" if top else "bottom"
-    fallback_strip = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, expand_px)
-
-    canvas, mask = _build_edge_crop(img, top, expand_px)
-    canvas_buf = io.BytesIO(); canvas.save(canvas_buf, format="PNG")
-    mask_buf = io.BytesIO(); mask.convert("RGB").save(mask_buf, format="PNG")
-    canvas_url = await _fal_storage_upload(client, canvas_buf.getvalue(), "image/png", "canvas.png")
-    mask_url = await _fal_storage_upload(client, mask_buf.getvalue(), "image/png", "mask.png")
-
-    fill_resp = await client.post(
-        FLUX_FILL_URL,
-        json={
-            "image_url": canvas_url,
-            "mask_url": mask_url,
-            "prompt": OUTPAINT_PROMPT,
-            "num_images": 1,
-            "output_format": "png",
-            "enhance_prompt": True,
-        },
-        headers={"Authorization": f"Key {FAL_KEY}"},
-    )
-    if fill_resp.status_code != 200:
-        print(f"[outpaint] {label} flux-fill call failed ({fill_resp.status_code}): {fill_resp.text}", flush=True)
-        return fallback_strip, "stretch-fallback"
-
-    result_url = _extract_image_url(fill_resp.json())
-    if not result_url:
-        print(f"[outpaint] {label} flux-fill returned no image URL", flush=True)
-        return fallback_strip, "stretch-fallback"
-
-    result_resp = await client.get(result_url)
-    if result_resp.status_code != 200:
-        return fallback_strip, "stretch-fallback"
-
-    result_img = Image.open(io.BytesIO(result_resp.content)).convert("RGB")
-    if result_img.size != canvas.size:
-        result_img = result_img.resize(canvas.size, Image.LANCZOS)  # Flux can snap to its own internal grid
-    strip = result_img.crop((0, 0, canvas.width, expand_px)) if top \
-        else result_img.crop((0, canvas.height - expand_px, canvas.width, canvas.height))
-
-    stat = ImageStat.Stat(strip)
-    mean = sum(stat.mean) / len(stat.mean)
-    ratio = mean / source_mean if source_mean > 0 else 1.0
-    print(f"[outpaint] {label} flux-fill strip mean={mean:.2f} (source edge mean={source_mean:.2f}, ratio={ratio:.2f})", flush=True)
-    if mean < DEGENERATE_ABS_MEAN_FLOOR or ratio < DARKENING_RATIO_THRESHOLD:
-        print(f"[outpaint] {label} strip still looked degenerate — falling back to edge-stretch for this edge only", flush=True)
-        return fallback_strip, "stretch-fallback"
-
-    return strip, "flux-fill"
+    return band.resize((img.width, height), Image.LANCZOS)
 
 async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezone_w: int, savezone_h: int) -> tuple[str, str]:
-    """Given a save-zone creative (any size — center-fit to savezone_w x savezone_h), extend it
-    top/bottom via Flux Fill to the shared OUTPAINT_W x OUTPAINT_H working canvas. Returns
-    (final_url, method); the caller's frontend applies the artificial upscale to the final
-    1080x1920 delivery size afterward (same shared step for every flow — see normalizeTo1080x1920
-    in static/index.html)."""
-    from PIL import ImageOps
-
+    """Given a save-zone creative (any size — stretched, not cropped, to savezone_w x savezone_h),
+    extend it top/bottom to the shared OUTPAINT_W x OUTPAINT_H working canvas. Flat/solid/gradient
+    edges get a free deterministic stretch; photographic/textured edges go through flux-2-pro/
+    outpaint (whole image, no mask/prompt, one call for both edges). Returns (final_url, method);
+    the caller's frontend applies the artificial upscale to the final 1080x1920 delivery size
+    afterward (same shared step for every flow — see normalizeTo1080x1920 in static/index.html)."""
     img = Image.open(io.BytesIO(savezone_bytes)).convert("RGB")
-    img = ImageOps.fit(img, (savezone_w, savezone_h), Image.LANCZOS)
+    img = img.resize((savezone_w, savezone_h), Image.LANCZOS)  # stretch/squash to fit exactly, no crop
     expand_px = (OUTPAINT_H - savezone_h) // 2
 
     top_mean, top_stdev = _band_stats(img, 0)
@@ -319,23 +185,38 @@ async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezo
     print(f"[outpaint] {savezone_w}x{savezone_h} source edge top mean={top_mean:.2f} stdev={top_stdev:.2f} | "
           f"bottom mean={bottom_mean:.2f} stdev={bottom_stdev:.2f} | flat={is_flat}", flush=True)
 
-    if is_flat:
-        # Solid/gradient design background: the deterministic edge-stretch already IS the
-        # correct continuation. Skip the paid AI call — free, instant, no hallucination risk.
-        top_strip = _make_edge_strip(img, 0, expand_px)
-        bottom_strip = _make_edge_strip(img, savezone_h - EDGE_SOURCE_BAND_PX, expand_px)
-        method = "flat-stretch"
-    else:
-        top_strip, top_method = await _flux_fill_edge(client, img, True, top_mean, expand_px)
-        bottom_strip, bottom_method = await _flux_fill_edge(client, img, False, bottom_mean, expand_px)
-        method = top_method if top_method == bottom_method else f"top={top_method},bottom={bottom_method}"
+    if not is_flat:
+        img_buf = io.BytesIO(); img.save(img_buf, format="PNG")
+        img_url = await _fal_storage_upload(client, img_buf.getvalue(), "image/png", "savezone.png")
+        resp = await client.post(
+            FLUX2_OUTPAINT_URL,
+            json={
+                "image_url": img_url,
+                "expand_top": expand_px,
+                "expand_bottom": expand_px,
+                "mode": FLUX2_OUTPAINT_MODE,
+                "output_format": "png",
+            },
+            headers={"Authorization": f"Key {FAL_KEY}"},
+        )
+        if resp.status_code == 200:
+            result_url = _extract_image_url(resp.json())
+            if result_url:
+                return result_url, "flux2-outpaint"
+            print("[outpaint] flux-2-pro returned no image URL — falling back to edge-stretch", flush=True)
+        else:
+            print(f"[outpaint] flux-2-pro call failed ({resp.status_code}): {resp.text} — falling back to edge-stretch", flush=True)
 
+    # Flat background, OR flux-2-pro call failed — free deterministic edge-stretch.
+    top_strip = _make_edge_strip(img, 0, expand_px)
+    bottom_strip = _make_edge_strip(img, savezone_h - EDGE_SOURCE_BAND_PX, expand_px)
     final_canvas = Image.new("RGB", (OUTPAINT_W, OUTPAINT_H))
     final_canvas.paste(top_strip, (0, 0))
     final_canvas.paste(img, (0, expand_px))
     final_canvas.paste(bottom_strip, (0, expand_px + savezone_h))
     final_buf = io.BytesIO(); final_canvas.save(final_buf, format="PNG")
     final_url = await _fal_storage_upload(client, final_buf.getvalue(), "image/png", "final.png")
+    method = "flat-stretch" if is_flat else "stretch-fallback"
     return final_url, method
 
 # ── API: upload reference image to FAL Storage ─────────────
@@ -361,7 +242,7 @@ async def generate_creative(
     model: str = Form("nano-banana-2"),
 ):
     """Generate a text-safe 720x900 (4:5) creative, then outpaint the background top/bottom
-    to the shared 720x1280 working canvas via Flux Fill. Returns {url, savezone_url}."""
+    to the shared 720x1280 working canvas. Returns {url, savezone_url}."""
     _require_fal_key()
     if model not in SAVEZONE_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
