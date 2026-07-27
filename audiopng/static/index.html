@@ -739,7 +739,8 @@ body {
   position: relative;
 }
 
-.preview-video-wrap video {
+.preview-video-wrap video,
+.preview-video-wrap img#imagePreview {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -849,6 +850,10 @@ body {
     <button class="btn primary" id="btnMerge" disabled>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       RUN
+    </button>
+    <button class="btn" id="btnRunImagesOnly" disabled title="Только оверлей поверх картинок, без аудио/видео">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      RUN IMAGE ONLY
     </button>
     <button class="btn" id="btnDownload" disabled>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1001,6 +1006,7 @@ body {
           <p>Add assets & press RUN<br><span style="color:var(--text-muted);font-size:0.68rem">9:16 Vertical Preview</span></p>
         </div>
         <video id="videoPlayer" controls></video>
+        <img id="imagePreview" alt="">
       </div>
       <div class="file-list" id="fileList"></div>
     </div>
@@ -1084,10 +1090,12 @@ const musicDrop = $('musicDrop'); const musicInput = $('musicInput');
 const musicLabel = $('musicLabel');
 const musicVol = $('musicVol');
 const btnMerge = $('btnMerge'); const btnDownload = $('btnDownload');
+const btnRunImagesOnly = $('btnRunImagesOnly');
 const mergeProgress = $('mergeProgress');
 const globalProgressWrap = $('globalProgressWrap');
 const globalProgressBar = $('globalProgressBar');
 const videoPlayer = $('videoPlayer'); const placeholder = $('placeholder');
+const imagePreview = $('imagePreview');
 const fileList = $('fileList');
 const imgModeToggle = $('imgModeToggle'); const genPrompt = $('genPrompt');
 const genModel = $('genModel');
@@ -1711,6 +1719,7 @@ function updateAdjustCanvasSync(slot, img, canvas) {
 function updateButtons() {
   const hasAudio = voiceFile || musicFile;
   btnMerge.disabled = !hasAudio || images.length === 0;
+  btnRunImagesOnly.disabled = images.length === 0; // не требует аудио — только оверлей
   btnDownload.disabled = outputFiles.length === 0;
   btnGenerate.disabled = genPrompt.value.trim().length === 0;
 }
@@ -1767,13 +1776,19 @@ async function getTemplateBlob(id) {
   return await res.blob();
 }
 
-// Audio mixing via Web Audio API
+// Audio mixing via Web Audio API. Video length is driven by Voice (the narration is what the
+// visuals are timed to) — Music is the background bed and must fill that ENTIRE length by
+// looping, not play once and go silent partway through. Bug fixed here: Music previously
+// played only its own natural duration once, so on the (typical) case of Voice being longer,
+// the music audibly cut out under the voice well before the video ended.
+const AUDIO_SAMPLE_RATE = 48000; // AAC delivery spec: 48 kHz
+
 async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
   const decode = async (file) => {
     const buf = await file.arrayBuffer();
     return new AudioContext().decodeAudioData(buf);
   };
-  
+
   const [voiceBuf, musicBuf] = await Promise.all([
     voiceFile ? decode(voiceFile) : null,
     musicFile ? decode(musicFile) : null,
@@ -1782,10 +1797,7 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
   const voiceLen = voiceBuf ? voiceBuf.duration : 0;
   const musicLen = musicBuf ? musicBuf.duration : 0;
   const totalLen = Math.max(voiceLen, musicLen);
-  const sampleRate = Math.max(
-    voiceBuf?.sampleRate || 48000,
-    musicBuf?.sampleRate || 48000
-  );
+  const sampleRate = AUDIO_SAMPLE_RATE;
 
   const offlineCtx = new OfflineAudioContext(2, Math.ceil(totalLen * sampleRate), sampleRate);
 
@@ -1801,6 +1813,7 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
   if (musicBuf) {
     const src = offlineCtx.createBufferSource();
     src.buffer = musicBuf;
+    src.loop = true; // fill the full (Voice-driven) video length instead of cutting out early
     const gain = offlineCtx.createGain();
     gain.gain.value = musicVol / 100;
     src.connect(gain).connect(offlineCtx.destination);
@@ -1812,13 +1825,11 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
 }
 
 // Render one image → MP4 blob. `overlays` is drawn in order (e.g. logo, then disclaimer on top).
-async function renderOneVideo(imgFile, overlays, audioBuf) {
-  // Force 1080x1920 (9:16 vertical) — все входы (Upload 9:16, Upload 3:4 после
-  // outpaint+нормализации) уже приведены к этому холсту, так что здесь просто
-  // финальный контейнер, без даунскейла.
-  const width = TARGET_W;
-  const height = TARGET_H;
-
+// Draws the base image (contain-fit, black letterbox) + overlays (logo/disclaimer) onto a
+// 1080x1920 canvas. Shared by video rendering (renderOneVideo) and the audio-less image
+// export (renderOneImage) — one drawing implementation, two output paths.
+async function composeOverlayCanvas(imgFile, overlays) {
+  const width = TARGET_W, height = TARGET_H;
   const imgBitmap = await createImageBitmap(imgFile);
 
   const overlayBitmaps = await Promise.all(overlays.map(async o => {
@@ -1854,12 +1865,48 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     ctx.drawImage(ov.bitmap, ox, oy, ow, oh);
   }
 
+  imgBitmap.close();
+  overlayBitmaps.forEach(ov => ov && ov.bitmap.close());
+  return canvas;
+}
+
+// Delivery spec target (matches a "Match Source — High bitrate" H.264 export preset):
+// High Profile, Level 4.1/4.2, 25fps, VBR ~5 Mbps @1080p, AAC 48kHz stereo ~256kbps.
+const VIDEO_FRAME_RATE = 25;
+const VIDEO_BITRATE = 5_000_000;
+const AUDIO_BITRATE = 256_000;
+const VIDEO_KEYFRAME_INTERVAL = VIDEO_FRAME_RATE * 2; // ~2s GOP — reasonable seek granularity
+
+// Picks the best H.264 profile/level this browser/hardware actually supports, preferring the
+// spec's High Profile L4.2/L4.1, with safe fallbacks — hardcoding an unsupported profile would
+// silently break rendering on browsers/hardware without it.
+async function pickVideoCodec(width, height) {
+  const candidates = [
+    'avc1.64002A', // High Profile, Level 4.2
+    'avc1.640029', // High Profile, Level 4.1
+    'avc1.4d0029', // Main Profile, Level 4.1 fallback
+    'avc1.42002A', // Baseline, Level 4.2 fallback
+  ];
+  for (const codec of candidates) {
+    try {
+      const support = await VideoEncoder.isConfigSupported({
+        codec, width, height, bitrate: VIDEO_BITRATE, framerate: VIDEO_FRAME_RATE, bitrateMode: 'variable',
+      });
+      if (support.supported) return codec;
+    } catch (e) { /* try next candidate */ }
+  }
+  return 'avc1.420028'; // last-resort — previously working Baseline Level 4.0
+}
+
+async function renderOneVideo(imgFile, overlays, audioBuf) {
+  // Force 1080x1920 (9:16 vertical) — все входы (Upload 9:16, Upload 3:4 после
+  // outpaint+нормализации) уже приведены к этому холсту, так что здесь просто
+  // финальный контейнер, без даунскейла.
+  const width = TARGET_W;
+  const height = TARGET_H;
+
+  const canvas = await composeOverlayCanvas(imgFile, overlays);
   const frameBitmap = canvas.transferToImageBitmap();
-  const frame = new VideoFrame(frameBitmap, {
-    timestamp: 0,
-    duration: Math.round(audioBuf.duration * 1_000_000),
-  });
-  frameBitmap.close();
 
   const muxerTarget = new Mp4Muxer.ArrayBufferTarget();
   const muxer = new Mp4Muxer.Muxer({
@@ -1869,15 +1916,17 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     fastStart: 'in-memory',
   });
 
+  const videoCodec = await pickVideoCodec(width, height);
   const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: e => { throw e; },
   });
   videoEncoder.configure({
-    codec: 'avc1.420028',
+    codec: videoCodec,
     width, height,
-    bitrate: 1_100_000, // было 500k на 720x1280 — пропорционально росту разрешения (~2.25x пикселей)
-    framerate: 1,
+    bitrate: VIDEO_BITRATE,
+    bitrateMode: 'variable', // VBR
+    framerate: VIDEO_FRAME_RATE,
   });
 
   const audioEncoder = new AudioEncoder({
@@ -1888,13 +1937,28 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     codec: 'mp4a.40.2',
     numberOfChannels: audioBuf.numberOfChannels,
     sampleRate: audioBuf.sampleRate,
-    bitrate: 128_000,
+    bitrate: AUDIO_BITRATE,
   });
 
-  videoEncoder.encode(frame, { keyFrame: true });
+  // The image never changes, but we still encode real per-frame samples at VIDEO_FRAME_RATE
+  // (identical content compresses to almost nothing under VBR) so the output is genuinely
+  // 25fps/progressive, matching standard delivery specs instead of one giant held frame.
+  const frameDurationUs = Math.round(1_000_000 / VIDEO_FRAME_RATE);
+  const totalFrames = Math.max(1, Math.round((audioBuf.duration * 1_000_000) / frameDurationUs));
+  for (let i = 0; i < totalFrames; i++) {
+    if (videoEncoder.encodeQueueSize > 30) {
+      await new Promise(r => setTimeout(r, 10));
+    }
+    const frame = new VideoFrame(frameBitmap, {
+      timestamp: i * frameDurationUs,
+      duration: frameDurationUs,
+    });
+    videoEncoder.encode(frame, { keyFrame: i % VIDEO_KEYFRAME_INTERVAL === 0 });
+    frame.close();
+  }
   await videoEncoder.flush();
   videoEncoder.close();
-  frame.close();
+  frameBitmap.close();
 
   const audioData = createAudioData(audioBuf);
   audioEncoder.encode(audioData);
@@ -1904,10 +1968,13 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
 
   muxer.finalize();
 
-  imgBitmap.close();
-  overlayBitmaps.forEach(ov => ov && ov.bitmap.close());
-
   return new Blob([muxerTarget.buffer], { type: 'video/mp4' });
+}
+
+// RUN IMAGE ONLY: same overlay composition, no audio/video encoding — exports a flat PNG.
+async function renderOneImage(imgFile, overlays) {
+  const canvas = await composeOverlayCanvas(imgFile, overlays);
+  return await canvas.convertToBlob({ type: 'image/png' });
 }
 
 // Helper: AudioBuffer → AudioData
@@ -1929,9 +1996,30 @@ function createAudioData(buf) {
   });
 }
 
+// Shared overlay resolution — used by both RUN (video) and RUN IMAGE ONLY, so the overlay
+// picked for a given image is identical regardless of which output path renders it.
+async function resolveFixedOverlayBlobs() {
+  const logoBlobFixed = overlayState.logo.selectedAutoGroup ? null : await getTemplateBlob(overlayState.logo.selectedTemplateId);
+  const discBlobFixed = overlayState.disclaimer.selectedAutoGroup ? null : await getTemplateBlob(overlayState.disclaimer.selectedTemplateId);
+  return { logoBlobFixed, discBlobFixed };
+}
+
+async function resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed) {
+  if ((overlayState.logo.selectedAutoGroup || overlayState.disclaimer.selectedAutoGroup) && !img.overlayTone) {
+    await computeImageTone(img);
+  }
+  const logoBlob = overlayState.logo.selectedAutoGroup ? getOverlayBlobForImage('logo', img) : logoBlobFixed;
+  const discBlob = overlayState.disclaimer.selectedAutoGroup ? getOverlayBlobForImage('disclaimer', img) : discBlobFixed;
+  return [
+    { blob: logoBlob, ySlider: img.logoYSlider ?? 640, scale: img.logoScale ?? 100 },
+    { blob: discBlob, ySlider: img.discYSlider ?? 640, scale: img.discScale ?? 100 },
+  ];
+}
+
 btnMerge.addEventListener('click', async () => {
   if (!hasWebCodecs) { alert('Your browser does not support WebCodecs. Use Chrome/Edge.'); return; }
   btnMerge.disabled = true;
+  btnRunImagesOnly.disabled = true;
   btnDownload.disabled = true;
   outputFiles = [];
   renderOutputFiles();
@@ -1957,37 +2045,25 @@ btnMerge.addEventListener('click', async () => {
     updateProgress('Mixing audio tracks…', 0);
     const mixedAudio = await mixAudio(voiceFile, musicFile, voiceVolume, musicVolume);
 
-    const logoBlobFixed = overlayState.logo.selectedAutoGroup ? null : await getTemplateBlob(overlayState.logo.selectedTemplateId);
-    const discBlobFixed = overlayState.disclaimer.selectedAutoGroup ? null : await getTemplateBlob(overlayState.disclaimer.selectedTemplateId);
+    const { logoBlobFixed, discBlobFixed } = await resolveFixedOverlayBlobs();
 
     for (let i = 0; i < images.length; i++) {
       updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const img = images[i];
-      if ((overlayState.logo.selectedAutoGroup || overlayState.disclaimer.selectedAutoGroup) && !img.overlayTone) {
-        await computeImageTone(img);
-      }
-      const logoBlob = overlayState.logo.selectedAutoGroup ? getOverlayBlobForImage('logo', img) : logoBlobFixed;
-      const discBlob = overlayState.disclaimer.selectedAutoGroup ? getOverlayBlobForImage('disclaimer', img) : discBlobFixed;
-      const mp4Blob = await renderOneVideo(
-        img.file,
-        [
-          { blob: logoBlob, ySlider: img.logoYSlider ?? 640, scale: img.logoScale ?? 100 },
-          { blob: discBlob, ySlider: img.discYSlider ?? 640, scale: img.discScale ?? 100 },
-        ],
-        mixedAudio
-      );
+      const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
+      const mp4Blob = await renderOneVideo(img.file, overlays, mixedAudio);
       const blobUrl = URL.createObjectURL(mp4Blob);
       outputFiles.push({
         name: `${images[i].name.replace(/\.[^.]+$/, '')}.mp4`,
         blob: mp4Blob,
         blobUrl,
+        type: 'video',
       });
     }
 
     updateProgress(`Done — ${outputFiles.length} video(s) ready`, totalSteps);
     barEl.className = 'progress-bar done';
     statusEl.className = 'status-bar';
-    btnMerge.disabled = false;
     btnDownload.disabled = false;
     renderOutputFiles();
   } catch (e) {
@@ -1996,7 +2072,67 @@ btnMerge.addEventListener('click', async () => {
     barEl.className = 'progress-bar error';
     statusEl.className = 'status-bar';
     statusEl.style.color = '#ef4444';
-    btnMerge.disabled = false;
+  } finally {
+    updateButtons();
+  }
+});
+
+// RUN IMAGE ONLY — same overlay composition as RUN, but skips audio mixing/video encoding
+// entirely: output is a flat PNG per image (image + logo/disclaimer overlay baked in).
+btnRunImagesOnly.addEventListener('click', async () => {
+  btnMerge.disabled = true;
+  btnRunImagesOnly.disabled = true;
+  btnDownload.disabled = true;
+  outputFiles = [];
+  renderOutputFiles();
+
+  const totalSteps = images.length;
+  let currentStep = 0;
+  const statusEl = mergeProgress;
+  const barEl = globalProgressBar;
+  const wrapEl = globalProgressWrap;
+
+  function updateProgress(text, stepDone) {
+    if (stepDone !== undefined) currentStep = stepDone;
+    const pct = Math.round((currentStep / totalSteps) * 100);
+    wrapEl.style.display = 'block';
+    barEl.className = 'progress-bar';
+    barEl.style.width = pct + '%';
+    statusEl.style.display = 'inline';
+    statusEl.className = 'status-bar processing';
+    statusEl.textContent = text;
+  }
+
+  try {
+    const { logoBlobFixed, discBlobFixed } = await resolveFixedOverlayBlobs();
+
+    for (let i = 0; i < images.length; i++) {
+      updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
+      const img = images[i];
+      const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
+      const pngBlob = await renderOneImage(img.file, overlays);
+      const blobUrl = URL.createObjectURL(pngBlob);
+      outputFiles.push({
+        name: `${images[i].name.replace(/\.[^.]+$/, '')}.png`,
+        blob: pngBlob,
+        blobUrl,
+        type: 'image',
+      });
+    }
+
+    updateProgress(`Done — ${outputFiles.length} image(s) ready`, totalSteps);
+    barEl.className = 'progress-bar done';
+    statusEl.className = 'status-bar';
+    btnDownload.disabled = false;
+    renderOutputFiles();
+  } catch (e) {
+    console.error(e);
+    updateProgress(`Error: ${e.message}`, currentStep);
+    barEl.className = 'progress-bar error';
+    statusEl.className = 'status-bar';
+    statusEl.style.color = '#ef4444';
+  } finally {
+    updateButtons();
   }
 });
 
@@ -2004,7 +2140,9 @@ btnMerge.addEventListener('click', async () => {
 function renderOutputFiles() {
   fileList.innerHTML = outputFiles.map((f, i) => `
     <div class="file-item" data-idx="${i}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ${f.type === 'image'
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>'}
       <span>${esc(f.name)}</span>
     </div>
   `).join('');
@@ -2014,6 +2152,7 @@ function renderOutputFiles() {
   if (outputFiles.length === 0) {
     placeholder.style.display = 'flex';
     videoPlayer.style.display = 'none';
+    imagePreview.style.display = 'none';
   } else {
     previewOutput(0);
   }
@@ -2023,9 +2162,18 @@ function previewOutput(idx) {
   document.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
   if (fileList.children[idx]) fileList.children[idx].classList.add('active');
   placeholder.style.display = 'none';
-  videoPlayer.style.display = 'block';
-  videoPlayer.src = outputFiles[idx].blobUrl;
-  videoPlayer.play();
+  const file = outputFiles[idx];
+  if (file.type === 'image') {
+    videoPlayer.pause();
+    videoPlayer.style.display = 'none';
+    imagePreview.style.display = 'block';
+    imagePreview.src = file.blobUrl;
+  } else {
+    imagePreview.style.display = 'none';
+    videoPlayer.style.display = 'block';
+    videoPlayer.src = file.blobUrl;
+    videoPlayer.play();
+  }
 }
 
 // ── Download ────────────────────────────────────────────────
