@@ -27,13 +27,21 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 
 router = APIRouter(prefix="/audiopng")
 
-# ── Ad-creative pipeline: generate a save-zone image, then outpaint the ──
-# background top/bottom to reach the final 9:16 canvas. All text/graphics from
-# the save-zone generator stay inside the untouched center band, so nothing
-# ends up in the newly-painted top/bottom strips.
-SAVEZONE_W, SAVEZONE_H = 1080, 1350   # 4:5 "text-safe" creative
-EXPAND_PX = 285                        # painted on top AND bottom
-FINAL_W, FINAL_H = SAVEZONE_W, SAVEZONE_H + EXPAND_PX * 2   # 1080 x 1920 (9:16)
+# ── Ad-creative pipeline: generate/upload a save-zone image, then outpaint the ──
+# background top/bottom via Flux Fill to a compact 720x1280 (9:16) working canvas.
+# All text/graphics from the save-zone stay inside the untouched center band, so
+# nothing ends up in the newly-painted top/bottom strips.
+#
+# Flux Fill runs at this smaller 720-wide working resolution (not the final 1080x1920
+# delivery size) for speed/cost — the frontend then applies a deterministic artificial
+# upscale to 1080x1920 (see normalizeTo1080x1920 in static/index.html), reused via the
+# same addImages()/finalizeEntry() path for BOTH flows below, so this resize happens
+# exactly once, in one shared place, regardless of which flow produced the image.
+OUTPAINT_W, OUTPAINT_H = 720, 1280
+
+# Two save-zone shapes feed the same outpaint target above, each via _run_outpaint():
+AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H = 720, 900     # ✨ AI Gen save-zone — 4:5
+UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H = 720, 960   # 🖼️ Upload 3:4 save-zone — 3:4
 
 FLUX_FILL_URL = "https://fal.run/fal-ai/flux-pro/v1/fill"
 
@@ -206,28 +214,29 @@ def _make_edge_strip(img: Image.Image, band_y0: int, height: int) -> Image.Image
 # edges (small icons, objects) it was failing on. This is the actual generation-quality fix; the
 # darkening check below is a thin residual safety net, not the fix itself.
 OUTPAINT_CONTEXT_PX = 160  # real save-zone content included as anchor context per edge crop.
-# Kept deliberately short (about half the masked EXPAND_PX height): a wider window can include a
-# full UI element (e.g. an icon+caption row or button) which gives Flux enough visual evidence to
-# recognize "this is a repeating layout" and fabricate a continuation of it — buttons, captions,
-# more rows — instead of extending plain background. A short window still carries real color/
-# lighting/texture for continuity without showing a complete, recognizable design pattern.
+# Kept deliberately short (about half the masked expand_px height, for the larger of the two
+# save-zone shapes): a wider window can include a full UI element (e.g. an icon+caption row or
+# button) which gives Flux enough visual evidence to recognize "this is a repeating layout" and
+# fabricate a continuation of it — buttons, captions, more rows — instead of extending plain
+# background. A short window still carries real color/lighting/texture for continuity without
+# showing a complete, recognizable design pattern.
 MASK_FEATHER_PX = 32       # soft gradient at the mask boundary instead of a hard cut
 
-def _build_edge_crop(img: Image.Image, top: bool) -> tuple[Image.Image, Image.Image]:
+def _build_edge_crop(img: Image.Image, top: bool, expand_px: int) -> tuple[Image.Image, Image.Image]:
     """Small working canvas + feathered mask for outpainting ONE edge (top or bottom)."""
     w = img.width
     context = img.crop((0, 0, w, OUTPAINT_CONTEXT_PX)) if top \
         else img.crop((0, img.height - OUTPAINT_CONTEXT_PX, w, img.height))
-    placeholder = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, EXPAND_PX)
-    crop_h = EXPAND_PX + OUTPAINT_CONTEXT_PX
+    placeholder = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, expand_px)
+    crop_h = expand_px + OUTPAINT_CONTEXT_PX
 
     canvas = Image.new("RGB", (w, crop_h))
     mask = Image.new("L", (w, crop_h), 0)
     draw = ImageDraw.Draw(mask)
     if top:
         canvas.paste(placeholder, (0, 0))
-        canvas.paste(context, (0, EXPAND_PX))
-        draw.rectangle([0, 0, w, EXPAND_PX], fill=255)
+        canvas.paste(context, (0, expand_px))
+        draw.rectangle([0, 0, w, expand_px], fill=255)
     else:
         canvas.paste(context, (0, 0))
         canvas.paste(placeholder, (0, OUTPAINT_CONTEXT_PX))
@@ -236,12 +245,12 @@ def _build_edge_crop(img: Image.Image, top: bool) -> tuple[Image.Image, Image.Im
     mask = mask.filter(ImageFilter.GaussianBlur(radius=MASK_FEATHER_PX))
     return canvas, mask
 
-async def _flux_fill_edge(client: httpx.AsyncClient, img: Image.Image, top: bool, source_mean: float) -> tuple[Image.Image, str]:
-    """Outpaint ONE edge via Flux Fill on a focused crop. Returns (painted EXPAND_PX-tall strip, method)."""
+async def _flux_fill_edge(client: httpx.AsyncClient, img: Image.Image, top: bool, source_mean: float, expand_px: int) -> tuple[Image.Image, str]:
+    """Outpaint ONE edge via Flux Fill on a focused crop. Returns (painted expand_px-tall strip, method)."""
     label = "top" if top else "bottom"
-    fallback_strip = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, EXPAND_PX)
+    fallback_strip = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, expand_px)
 
-    canvas, mask = _build_edge_crop(img, top)
+    canvas, mask = _build_edge_crop(img, top, expand_px)
     canvas_buf = io.BytesIO(); canvas.save(canvas_buf, format="PNG")
     mask_buf = io.BytesIO(); mask.convert("RGB").save(mask_buf, format="PNG")
     canvas_url = await _fal_storage_upload(client, canvas_buf.getvalue(), "image/png", "canvas.png")
@@ -275,8 +284,8 @@ async def _flux_fill_edge(client: httpx.AsyncClient, img: Image.Image, top: bool
     result_img = Image.open(io.BytesIO(result_resp.content)).convert("RGB")
     if result_img.size != canvas.size:
         result_img = result_img.resize(canvas.size, Image.LANCZOS)  # Flux can snap to its own internal grid
-    strip = result_img.crop((0, 0, canvas.width, EXPAND_PX)) if top \
-        else result_img.crop((0, canvas.height - EXPAND_PX, canvas.width, canvas.height))
+    strip = result_img.crop((0, 0, canvas.width, expand_px)) if top \
+        else result_img.crop((0, canvas.height - expand_px, canvas.width, canvas.height))
 
     stat = ImageStat.Stat(strip)
     mean = sum(stat.mean) / len(stat.mean)
@@ -288,35 +297,39 @@ async def _flux_fill_edge(client: httpx.AsyncClient, img: Image.Image, top: bool
 
     return strip, "flux-fill"
 
-async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes) -> tuple[str, str]:
-    """Given a save-zone creative (any size — center-fit to SAVEZONE_W x SAVEZONE_H), extend it
-    top/bottom to the final FINAL_W x FINAL_H (9:16) canvas. Returns (final_url, method)."""
+async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezone_w: int, savezone_h: int) -> tuple[str, str]:
+    """Given a save-zone creative (any size — center-fit to savezone_w x savezone_h), extend it
+    top/bottom via Flux Fill to the shared OUTPAINT_W x OUTPAINT_H working canvas. Returns
+    (final_url, method); the caller's frontend applies the artificial upscale to the final
+    1080x1920 delivery size afterward (same shared step for every flow — see normalizeTo1080x1920
+    in static/index.html)."""
     from PIL import ImageOps
 
     img = Image.open(io.BytesIO(savezone_bytes)).convert("RGB")
-    img = ImageOps.fit(img, (SAVEZONE_W, SAVEZONE_H), Image.LANCZOS)
+    img = ImageOps.fit(img, (savezone_w, savezone_h), Image.LANCZOS)
+    expand_px = (OUTPAINT_H - savezone_h) // 2
 
     top_mean, top_stdev = _band_stats(img, 0)
-    bottom_mean, bottom_stdev = _band_stats(img, SAVEZONE_H - 1)
+    bottom_mean, bottom_stdev = _band_stats(img, savezone_h - 1)
     is_flat = top_stdev < FLAT_EDGE_STDEV_THRESHOLD and bottom_stdev < FLAT_EDGE_STDEV_THRESHOLD
-    print(f"[outpaint] source edge top mean={top_mean:.2f} stdev={top_stdev:.2f} | "
+    print(f"[outpaint] {savezone_w}x{savezone_h} source edge top mean={top_mean:.2f} stdev={top_stdev:.2f} | "
           f"bottom mean={bottom_mean:.2f} stdev={bottom_stdev:.2f} | flat={is_flat}", flush=True)
 
     if is_flat:
         # Solid/gradient design background: the deterministic edge-stretch already IS the
         # correct continuation. Skip the paid AI call — free, instant, no hallucination risk.
-        top_strip = _make_edge_strip(img, 0, EXPAND_PX)
-        bottom_strip = _make_edge_strip(img, SAVEZONE_H - EDGE_SOURCE_BAND_PX, EXPAND_PX)
+        top_strip = _make_edge_strip(img, 0, expand_px)
+        bottom_strip = _make_edge_strip(img, savezone_h - EDGE_SOURCE_BAND_PX, expand_px)
         method = "flat-stretch"
     else:
-        top_strip, top_method = await _flux_fill_edge(client, img, True, top_mean)
-        bottom_strip, bottom_method = await _flux_fill_edge(client, img, False, bottom_mean)
+        top_strip, top_method = await _flux_fill_edge(client, img, True, top_mean, expand_px)
+        bottom_strip, bottom_method = await _flux_fill_edge(client, img, False, bottom_mean, expand_px)
         method = top_method if top_method == bottom_method else f"top={top_method},bottom={bottom_method}"
 
-    final_canvas = Image.new("RGB", (FINAL_W, FINAL_H))
+    final_canvas = Image.new("RGB", (OUTPAINT_W, OUTPAINT_H))
     final_canvas.paste(top_strip, (0, 0))
-    final_canvas.paste(img, (0, EXPAND_PX))
-    final_canvas.paste(bottom_strip, (0, EXPAND_PX + SAVEZONE_H))
+    final_canvas.paste(img, (0, expand_px))
+    final_canvas.paste(bottom_strip, (0, expand_px + savezone_h))
     final_buf = io.BytesIO(); final_canvas.save(final_buf, format="PNG")
     final_url = await _fal_storage_upload(client, final_buf.getvalue(), "image/png", "final.png")
     return final_url, method
@@ -343,8 +356,8 @@ async def generate_creative(
     prompt: str = Form(...),
     model: str = Form("nano-banana-2"),
 ):
-    """Generate a text-safe 1080x1350 creative, then outpaint the background top/bottom
-    to a full 1080x1920 (9:16) canvas via Flux Fill. Returns {url, savezone_url}."""
+    """Generate a text-safe 720x900 (4:5) creative, then outpaint the background top/bottom
+    to the shared 720x1280 working canvas via Flux Fill. Returns {url, savezone_url}."""
     _require_fal_key()
     if model not in SAVEZONE_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
@@ -364,19 +377,20 @@ async def generate_creative(
         if img_resp.status_code != 200:
             raise HTTPException(500, "Failed to download save-zone image")
 
-        final_url, method = await _run_outpaint(client, img_resp.content)
+        final_url, method = await _run_outpaint(client, img_resp.content, AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H)
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
 
 @router.post("/api/outpaint-upload")
 async def outpaint_upload(file: UploadFile = File(...)):
-    """Take an already-made save-zone creative (any size, e.g. a 3:4/4:5 upload) and outpaint its
-    background top/bottom to the final 1080x1920 (9:16) canvas — same pipeline as generate-creative,
-    minus the text-to-image step. Returns {url, outpaint_method}."""
+    """Take an uploaded 3:4 creative and outpaint its background top/bottom to the shared
+    720x1280 working canvas — same _run_outpaint() pipeline as generate-creative, just a
+    different save-zone shape (3:4 instead of 4:5), minus the text-to-image step.
+    Returns {url, outpaint_method}."""
     _require_fal_key()
     content = await file.read()
     async with httpx.AsyncClient(timeout=180) as client:
-        final_url, method = await _run_outpaint(client, content)
+        final_url, method = await _run_outpaint(client, content, UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H)
     return {"url": final_url, "outpaint_method": method}
 
 # Статика (templates/, static/index.html+ffmpeg) монтируется в unified_server.py
