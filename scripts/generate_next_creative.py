@@ -13,14 +13,22 @@ text_blocks/композицией/цветом/структурой и оцен
 Раньше один запрос сразу тянул оба промпта + подробный построчный rationale — это было
 избыточно тяжело и медленно. Теперь запрос лёгкий и просит только то, что нужно.
 
-Чтобы новые концепции не повторялись между запусками, скрипт подтягивает историю всех
-предыдущих брифов этого branch — только идею (нишу + однострочную концепцию, без
-архетипа/структуры/коннектора/фона — это раздувало контекст ненужными деталями) — из
-generated_briefs и явно просит модель НЕ конвергировать на одном и том же выигрышном
-паттерне каждый раз — это портфель экспериментов, а не единственный правильный ответ.
-После получения ответа скрипт также проверяет target_audience_niche на схожесть с уже
-использованными — при совпадении просит модель переделать (тот же retry-цикл, что и
-для невалидного JSON).
+Модель по умолчанию должна копировать ДОМИНИРУЮЩИЙ архетип базы (не изобретать новый
+каждый раз) — раньше промпт наоборот требовал "обязательно что-то новое структурно",
+из-за чего модель регулярно уходила от реально проверенного/частого паттерна к
+самопридуманному. Распределение архетипов (сколько раз встречается каждый и с какой
+средней оценкой) считается детерминированно в Python (`build_archetype_stats`) и
+подаётся модели готовым текстом — так она не должна вычислять его сама по сырому
+JSON на ~80k+ токенов, где легко упустить, какой паттерн реально доминирует.
+"Новизна" теперь ограничена поверхностью (ниша, копирайт, конкретные инструменты/иконки,
+цветовой акцент), а не структурой/архетипом.
+
+Чтобы новые концепции не повторяли одну и ту же нишу между запусками, скрипт подтягивает
+историю всех предыдущих брифов этого branch — только идею (нишу + однострочную концепцию,
+без архетипа/структуры/коннектора/фона — это раздувало контекст ненужными деталями) — из
+generated_briefs. После получения ответа скрипт также проверяет target_audience_niche на
+схожесть с уже использованными — при совпадении просит модель переделать (тот же
+retry-цикл, что и для невалидного JSON).
 
 Маркетолог может передать свободную подсказку (--hint / hint=... в UI) — например
 "сошлись больше на creative_id X", "попробуй лестницу вместо сетки", "светлая тема" —
@@ -118,6 +126,28 @@ def load_branch_creatives(db_path: Path, branch: str):
     return [{"creative_id": r[0], "score": r[1], "data": json.loads(r[2])} for r in rows]
 
 
+def build_archetype_stats(creatives) -> str:
+    """Deterministic (non-LLM) count of how often each archetype appears and how it scores.
+    The raw evidence payload is ~80k+ tokens of nested JSON for a modest-sized branch — asking
+    the model to eyeball that and correctly infer which single archetype actually dominates is
+    unreliable. Surfacing the count/average explicitly, in plain text, up front, means the model
+    doesn't have to compute it — and can't miss it."""
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"count": 0, "scores": []})
+    for c in creatives:
+        arch = c["data"].get("creative_archetype") or "unknown"
+        stats[arch]["count"] += 1
+        stats[arch]["scores"].append(c["score"])
+    total = len(creatives)
+    lines = []
+    for arch, s in sorted(stats.items(), key=lambda kv: -kv[1]["count"]):
+        scores = s["scores"]
+        avg = sum(scores) / len(scores)
+        n3 = scores.count(3)
+        lines.append(f"- {arch}: {s['count']}/{total} creatives, avg score {avg:.2f}, {n3} scored 3 (excellent)")
+    return "\n".join(lines)
+
+
 def build_evidence_payload(creatives) -> str:
     """Компактное, но полное представление каждого креатива для синтез-LLM."""
     blocks = []
@@ -193,8 +223,8 @@ def build_mode_schema(full_schema: dict, mode: str) -> dict:
 
 
 def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: str,
-                          history: list, mode: str, hint: str, mode_schema: dict,
-                          max_retries: int) -> dict:
+                          archetype_stats: str, history: list, mode: str, hint: str,
+                          mode_schema: dict, max_retries: int) -> dict:
     if history:
         history_lines = "\n".join(f"- {h['niche']}: {h['concept_summary']}" for h in history)
         history_block = (
@@ -214,16 +244,24 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
         "elements, step-list structure, psychological hooks). Some creatives also "
         "have marketer_element_feedback — direct human feedback on specific elements "
         "(worked_well/worked_poorly). Treat it as a stronger signal than the overall "
-        "score when present.\n\n"
+        "score when present. The ARCHETYPE DISTRIBUTION below (computed directly from the "
+        "database, not your own count) shows how often each archetype appears here and how "
+        "it scores on average.\n\n"
+        f"ARCHETYPE DISTRIBUTION for branch='{branch}':\n{archetype_stats}\n\n"
         "Task:\n"
-        "1. Identify what to reuse (patterns confirmed by score=3 / worked_well) and "
-        "what to avoid (score=1 / worked_poorly), but keep this internal — you'll "
-        "summarize it briefly in `reasoning`, not as an exhaustive list.\n"
-        "2. This is exploration, not just exploitation: don't default to repeating "
-        "the same archetype/structure every time just because it scored well once. "
-        "Deliberately introduce at least one genuinely new structural or visual "
-        "choice this run (see history below) and say what it is and why in "
-        "reasoning.new_experiment.\n"
+        "1. Default to the DOMINANT archetype/structure above (the one with the most "
+        "creatives and/or the best average score) as the structural template for this "
+        "concept — most new concepts should closely mirror its proven layout, not invent "
+        "a different one. Within that structure, pull concrete reusable details (headline "
+        "style, icon choices, CTA phrasing, color palette, specific tools/copy) from the "
+        "individual score=3 / worked_well creatives in the database below, and note what "
+        "you avoided from score=1 / worked_poorly ones.\n"
+        "2. Vary the SURFACE for this run — the niche, copy, specific tools/icons "
+        "referenced, and color accent — to fit the new audience. Only change the "
+        "underlying archetype/structure away from the dominant one if the marketer hint "
+        "below explicitly asks for a different style, or if the dominant archetype's "
+        "average score is clearly worse than an alternative's. Note in "
+        "reasoning.new_experiment what you adapted for this niche.\n"
         "3. Assemble a NEW vertical creative concept with real final copy (no "
         f"placeholders) and explicitly state target_audience_niche.{history_block}"
         f"{hint_block}\n"
@@ -235,14 +273,14 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
         f"its rules literally:\n{MODE_RULES[mode]}\n"
         "6. Fill `reasoning` with three SHORT entries (1-3 sentences each, not a "
         "list): reused (with inline creative_id refs), avoided (with inline refs), "
-        "new_experiment (what's new here and why it's worth testing).\n\n"
+        "new_experiment (what you adapted for this niche and why it should still work).\n\n"
         "Reply with EXACTLY one JSON object matching the following JSON Schema "
         "(draft-07), with no explanation and no markdown fencing:\n\n"
         f"{json.dumps(mode_schema, ensure_ascii=False)}"
     )
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Creative database (branch={branch}):\n{evidence_json}"},
+        {"role": "user", "content": f"Full creative records (branch={branch}):\n{evidence_json}"},
     ]
 
     validator = Draft7Validator(mode_schema)
@@ -334,17 +372,19 @@ def run_generation(branch: str, api_key: str, mode: str = "gpt_image_2", hint: s
     full_schema = json.loads(Path(schema_path).read_text())
     mode_schema = build_mode_schema(full_schema, mode)
     evidence_json = build_evidence_payload(creatives)
+    archetype_stats = build_archetype_stats(creatives)
+    log(f"Распределение архетипов:\n{archetype_stats}")
 
     history = load_brief_history(db_path, branch) if include_history else []
     if not include_history:
-        log("История прошлых брифов отключена — проверка на повтор ниши/архетипа не выполняется.")
+        log("История прошлых брифов отключена — проверка на повтор ниши не выполняется.")
     elif history:
-        log(f"В истории branch уже {len(history)} брифов — попрошу модель не конвергировать на одном архетипе/структуре.")
+        log(f"В истории branch уже {len(history)} брифов — попрошу модель не повторять нишу/идею.")
     if hint:
         log(f"Подсказка маркетолога: {hint}")
 
     log(f"Запрашиваю синтез у {model}...")
-    brief = call_synthesis_model(model, api_key, branch, evidence_json, history, mode, hint, mode_schema, max_retries)
+    brief = call_synthesis_model(model, api_key, branch, evidence_json, archetype_stats, history, mode, hint, mode_schema, max_retries)
 
     brief_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
