@@ -213,22 +213,26 @@ def _make_edge_strip(img: Image.Image, band_y0: int, height: int) -> Image.Image
 # keeps the model in a comfortable regime and gives it real pixel density on the busy/detailed
 # edges (small icons, objects) it was failing on. This is the actual generation-quality fix; the
 # darkening check below is a thin residual safety net, not the fix itself.
-OUTPAINT_CONTEXT_PX = 160  # real save-zone content included as anchor context per edge crop.
-# Kept deliberately short (about half the masked expand_px height, for the larger of the two
-# save-zone shapes): a wider window can include a full UI element (e.g. an icon+caption row or
-# button) which gives Flux enough visual evidence to recognize "this is a repeating layout" and
-# fabricate a continuation of it — buttons, captions, more rows — instead of extending plain
-# background. A short window still carries real color/lighting/texture for continuity without
-# showing a complete, recognizable design pattern.
-MASK_FEATHER_PX = 32       # soft gradient at the mask boundary instead of a hard cut
+# Context window (real, unmasked save-zone content given to Flux as an anchor) is kept
+# proportional to expand_px, NOT a fixed pixel count: a wider window relative to the masked
+# region gives Flux enough visual evidence to recognize "this is a repeating layout" (e.g. a
+# card/window edge, an icon+caption row) and fabricate a continuation of it — a fake header,
+# nav bar, logo, garbled text — instead of extending plain background. This ratio (roughly
+# half the masked height) is what keeps that from happening; it must scale with expand_px,
+# since a fixed context size silently drifts toward 1:1 (and the failure mode above) whenever
+# expand_px shrinks (e.g. a smaller working resolution) — a bug we hit in practice.
+OUTPAINT_CONTEXT_RATIO = 0.5
+OUTPAINT_CONTEXT_MIN_PX = 48  # floor so a very small expand_px still carries a usable anchor
+MASK_FEATHER_PX = 32          # soft gradient at the mask boundary instead of a hard cut
 
 def _build_edge_crop(img: Image.Image, top: bool, expand_px: int) -> tuple[Image.Image, Image.Image]:
     """Small working canvas + feathered mask for outpainting ONE edge (top or bottom)."""
     w = img.width
-    context = img.crop((0, 0, w, OUTPAINT_CONTEXT_PX)) if top \
-        else img.crop((0, img.height - OUTPAINT_CONTEXT_PX, w, img.height))
+    context_px = max(OUTPAINT_CONTEXT_MIN_PX, round(expand_px * OUTPAINT_CONTEXT_RATIO))
+    context = img.crop((0, 0, w, context_px)) if top \
+        else img.crop((0, img.height - context_px, w, img.height))
     placeholder = _make_edge_strip(img, 0 if top else img.height - EDGE_SOURCE_BAND_PX, expand_px)
-    crop_h = expand_px + OUTPAINT_CONTEXT_PX
+    crop_h = expand_px + context_px
 
     canvas = Image.new("RGB", (w, crop_h))
     mask = Image.new("L", (w, crop_h), 0)
@@ -239,8 +243,8 @@ def _build_edge_crop(img: Image.Image, top: bool, expand_px: int) -> tuple[Image
         draw.rectangle([0, 0, w, expand_px], fill=255)
     else:
         canvas.paste(context, (0, 0))
-        canvas.paste(placeholder, (0, OUTPAINT_CONTEXT_PX))
-        draw.rectangle([0, OUTPAINT_CONTEXT_PX, w, crop_h], fill=255)
+        canvas.paste(placeholder, (0, context_px))
+        draw.rectangle([0, context_px, w, crop_h], fill=255)
 
     mask = mask.filter(ImageFilter.GaussianBlur(radius=MASK_FEATHER_PX))
     return canvas, mask
