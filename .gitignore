@@ -1,0 +1,22 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+
+# Real creative data — code-only repo, data stays local
+Input/images/
+Input/creatives.csv
+db/*.db
+library/
+generated/
+
+# AudioPng runtime uploads/temp — not code
+audiopng/uploads/*
+!audiopng/uploads/.gitkeep
+audiopng/temp/*
+!audiopng/temp/.gitkeep
+audiopng/temp_ref/*
+!audiopng/temp_ref/.gitkeep
+.claude/

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+uploads/*
+!uploads/.gitkeep
+temp/*
+!temp/.gitkeep
+temp_ref/*
+!temp_ref/.gitkeep
+output/*
+!output/.gitkeep
+templates/*
+!templates/.gitkeep
+.DS_Store

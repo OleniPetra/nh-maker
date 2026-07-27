@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>no-human.AudioPng — AI Video Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Единая палитра Static Creo (см. scripts/review_ui.html) */
+  --bg-page: #EAE3D5;
+  --bg-surface: #ffffff;
+  --bg-subtle: #F1EADC;
+  --border-color: #DDD5C4;
+  --border-hover: #C9BFA9;
+  --text-primary: #221E17;
+  --text-secondary: #5c5548;
+  --text-muted: #8A8275;
+  --accent-primary: #221E17;
+  --accent-hover: #3a352b;
+  --accent-blue: #2563eb;
+  --accent-green: #16a34a;
+  --accent-green-bg: #f0fdf4;
+  --accent-green-border: #bbf7d0;
+  --accent-red: #E8604C;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header */
+.header {
+  height: 56px;
+  padding: 0 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  background: var(--text-primary);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.brand-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.brand-badge {
+  font-size: 0.65rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--bg-subtle);
+}
+
+.btn.primary {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Progress bar */
+.progress-wrap {
+  height: 4px;
+  background: var(--bg-subtle);
+  overflow: hidden;
+  display: none;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent-blue);
+  width: 0%;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-bar.done {
+  background: var(--accent-green);
+}
+
+.progress-bar.error {
+  background: var(--accent-red);
+}
+
+/* Layout container - 6 Custom Proportional Columns across 100% width */
+.container {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.2fr 2fr;
+  flex: 1;
+  height: calc(100vh - 56px);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Column */
+.column {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  min-width: 150px;
+}
+
+.column:last-child {
+  border-right: none;
+  background: var(--bg-page);
+}
+
+/* Column Header */
+.col-header {
+  padding: 12px 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.col-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+/* Controls & Inputs */
+.select-input {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-input:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Mode toggle (Upload / AI Generate) */
+.mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 12px 12px 0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.mode-toggle-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.mode-toggle-btn.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Dropzone */
+.dropzone {
+  margin: 12px;
+  padding: 18px 12px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--accent-blue);
+  background: #f0f7ff;
+  color: var(--accent-blue);
+}
+
+.dropzone.loaded {
+  border-color: var(--accent-green-border);
+  background: var(--accent-green-bg);
+  color: var(--accent-green);
+}
+
+.dropzone input[type=file] {
+  display: none;
+}
+
+.dropzone-icon {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  opacity: 0.7;
+}
+
+/* Image Queue (Column 1) - Huge 2x 9:16 Vertical Thumbnails */
+.img-queue {
+  flex: 1;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+}
+
+.img-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.img-item:hover {
+  border-color: var(--border-hover);
+}
+
+.img-thumb {
+  position: relative;
+  width: 144px;
+  height: 256px;
+  flex-shrink: 0;
+}
+
+.img-thumb img {
+  width: 144px;
+  height: 256px;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  display: block;
+}
+
+.img-item.processing .img-thumb img {
+  filter: blur(6px);
+}
+
+.img-thumb .spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: var(--radius-md);
+}
+
+.sc-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sc-spin 0.8s linear infinite;
+}
+
+@keyframes sc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.img-item .info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.img-item .name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.img-item .size {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.img-item .del {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.img-item .del:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+
+.img-count {
+  font-size: 0.7rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0 8px;
+}
+
+/* Template Section (Column 2) - Huge 2x 9:16 Vertical Thumbnails */
+.tpl-group-header {
+  padding: 8px 14px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+}
+
+.tpl-list {
+  padding: 10px 12px;
+}
+
+.tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.tpl-item:hover {
+  border-color: var(--border-hover);
+}
+
+.tpl-item.active {
+  border-color: var(--accent-blue);
+  background: #f0f7ff;
+}
+
+.tpl-item img {
+  width: 144px;
+  height: 256px;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  flex-shrink: 0;
+}
+
+.tpl-item .name {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-item .del {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tpl-item .del:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+
+.tpl-none {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px 8px;
+  line-height: 1.4;
+}
+
+.tpl-item-auto .name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tpl-auto-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.tone-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+/* Column 3: Overlay Adjustment Cards - 85% Preview Width, 15% Sliders */
+.adjust-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adjust-card-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adjust-card-body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.adjust-preview-box {
+  width: 85%;
+  aspect-ratio: 9 / 16;
+  max-height: 480px;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.adjust-preview-box canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.adjust-sliders-wrap {
+  width: 15%;
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-height: 250px;
+  background: var(--bg-subtle);
+  padding: 10px 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.v-slider-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  flex: 1;
+}
+
+.v-slider-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  writing-mode: horizontal-tb;
+}
+
+.v-slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  flex: 1;
+  width: 14px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* Column 4: Narrow Audio Column */
+.audio-section {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.audio-section:last-child {
+  border-bottom: none;
+  flex: 1;
+}
+
+.audio-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.slider-group label {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.slider-group input[type=range] {
+  flex: 1;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* Column 5: Preview & Output */
+.preview-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 14px;
+  gap: 12px;
+}
+
+.preview-video-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #09090b;
+  border-radius: var(--radius-lg);
+  border: 1px solid #27272a;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  max-height: 380px;
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 210px;
+  position: relative;
+}
+
+.preview-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+}
+
+.preview-video-wrap .placeholder {
+  color: #71717a;
+  text-align: center;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-video-wrap .placeholder p {
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.file-item {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-item:hover {
+  background: #e2e8f0;
+}
+
+.file-item.active {
+  background: #dbeafe;
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* Status message in header */
+.status-bar {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.status-bar.processing {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.ffmpeg-status {
+  padding: 6px 16px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #d97706;
+  background: #fffbeb;
+  border-bottom: 1px solid #fef3c7;
+  text-align: center;
+  display: none;
+}
+
+/* .sidebar* — инжектится общим scripts/shared/sidebar.js (единый с review_ui.html) */
+.app { display: flex; flex: 1; min-height: 0; }
+.app-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+
+<div class="ffmpeg-status" id="ffmpegStatus">
+  Initializing browser encoder... <span id="ffmpegLoadPct"></span>
+</div>
+
+<div class="app">
+<div id="sc-sidebar-root"></div>
+<script src="/static-shared/sidebar.js"></script>
+<div class="app-content">
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-logo">AP</div>
+    <span class="brand-title">no-human.AudioPng</span>
+    <span class="brand-badge">GPU WebCodecs</span>
+  </div>
+  <div class="header-actions">
+    <span class="status-bar" id="mergeProgress" style="display:none"></span>
+    <button class="btn primary" id="btnMerge" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      RUN
+    </button>
+    <button class="btn" id="btnDownload" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download Pack
+    </button>
+  </div>
+</div>
+
+<div class="progress-wrap" id="globalProgressWrap">
+  <div class="progress-bar" id="globalProgressBar"></div>
+</div>
+
+<div class="container">
+  <!-- COL 1: Images -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">1</span>Images</div>
+    </div>
+    <div class="mode-toggle" id="imgModeToggle">
+      <button type="button" class="mode-toggle-btn active" data-mode="upload916">📁 Upload 9:16</button>
+      <button type="button" class="mode-toggle-btn" data-mode="upload34">🖼️ Upload 3:4</button>
+      <button type="button" class="mode-toggle-btn" data-mode="generate">✨ AI Gen</button>
+    </div>
+
+    <!-- Upload mode: ready-to-use 9:16 videos/images, used as-is -->
+    <div id="uploadSection">
+      <div class="dropzone" id="imgDropzone">
+        <input type="file" id="imgInput" multiple accept="image/*">
+        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div>Drop images here</div>
+        <span style="font-size:0.68rem;color:var(--text-muted)">PNG, JPG, WebP — max 50</span>
+      </div>
+    </div>
+
+    <!-- Upload 3:4 mode: ready-made save-zone creatives, auto-outpainted to 9:16 -->
+    <div id="upload34Section" style="display:none">
+      <div class="dropzone" id="img34Dropzone">
+        <input type="file" id="img34Input" multiple accept="image/*">
+        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div>Drop 3:4 creatives here</div>
+        <span style="font-size:0.68rem;color:var(--text-muted)">Background auto-extended to 9:16</span>
+      </div>
+      <div id="outpaint34StatusMsg" style="font-size:0.7rem;color:var(--text-muted);margin:0 12px 8px;text-align:center;display:none"></div>
+    </div>
+
+    <!-- Generate mode: text-safe (1080x1350) creative + auto-outpaint to 9:16 -->
+    <div id="generateSection" style="display:none;padding:12px">
+      <label style="font-size:0.68rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">MODEL</label>
+      <select id="genModel" class="select-input" style="width:100%;margin-bottom:8px;padding:6px">
+        <option value="nano-banana-2">Nano Banana 2 (FAL)</option>
+        <option value="gpt-image-2">GPT Image 2 (FAL)</option>
+      </select>
+
+      <label style="font-size:0.68rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">PROMPT</label>
+      <textarea id="genPrompt" placeholder="Describe your ad creative — keep it centered, background gets extended automatically…" autocomplete="off" style="width:100%;height:90px;font-size:0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:8px;resize:vertical;font-family:inherit;outline:none"></textarea>
+
+      <button class="btn primary" id="btnGenerate" style="width:100%;margin-top:10px" disabled>✨ GENERATE</button>
+      <div id="genStatusMsg" style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;text-align:center;display:none"></div>
+    </div>
+
+    <div class="img-count" id="imgCount">0 / 50</div>
+    <div class="img-queue" id="imgQueue"></div>
+  </div>
+
+  <!-- COL 2: Overlay Templates (split: Logo / Disclaimer, parsed by filename) -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">2</span>Overlay</div>
+      <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted)">Shared</span>
+    </div>
+    <div class="tpl-group-header">Лого</div>
+    <div class="tpl-list" id="tplListLogo"></div>
+    <div class="tpl-group-header">Дисклеймер</div>
+    <div class="tpl-list" id="tplListDisclaimer"></div>
+  </div>
+
+  <!-- COL 3.1: Overlay Logo Adjust -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">3.1</span>Overlay Logo</div>
+      <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted)">Per-image</span>
+    </div>
+    <div id="overlayAdjustListLogo" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px">
+      <div class="tpl-none">
+        Select a logo overlay in Step 2 to enable position & size controls per image.
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 3.2: Overlay Disclaimer Adjust -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">3.2</span>Overlay Disclaimer</div>
+      <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted)">Per-image</span>
+    </div>
+    <div id="overlayAdjustListDisclaimer" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px">
+      <div class="tpl-none">
+        Select a disclaimer overlay in Step 2 to enable position & size controls per image.
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 4: Audio -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">4</span>Audio</div>
+    </div>
+    <div class="audio-section">
+      <div class="audio-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        Voice
+      </div>
+      <div class="audio-drop dropzone" id="voiceDrop" style="margin:0;padding:10px;font-size:0.7rem">
+        <input type="file" id="voiceInput" accept="audio/*,video/*">
+        <span id="voiceLabel">Voice / MP4</span>
+      </div>
+      <div class="slider-group">
+        <label>Vol</label>
+        <input type="range" id="voiceVol" min="0" max="100" value="100">
+      </div>
+    </div>
+
+    <div class="audio-section">
+      <div class="audio-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        Music
+      </div>
+      <div class="audio-drop dropzone" id="musicDrop" style="margin:0;padding:10px;font-size:0.7rem">
+        <input type="file" id="musicInput" accept="audio/*,video/*">
+        <span id="musicLabel">Music / MP4</span>
+      </div>
+      <div class="slider-group">
+        <label>Vol</label>
+        <input type="range" id="musicVol" min="0" max="100" value="100">
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 5: Preview & Export -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">5</span>Preview & Export</div>
+    </div>
+    <div class="preview-area" id="previewArea">
+      <div class="preview-video-wrap">
+        <div class="placeholder" id="placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <p>Add assets & press RUN<br><span style="color:var(--text-muted);font-size:0.68rem">9:16 Vertical Preview</span></p>
+        </div>
+        <video id="videoPlayer" controls></video>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script src="ffmpeg/ffmpeg.js?v=3"></script>
+<script src="ffmpeg/index.js?v=3"></script>
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@4.1.0/build/mp4-muxer.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<script>
+// ── ffmpeg.wasm setup (safe-init: UI works even if CDN fails) ─
+const FFmpegW = typeof FFmpegWASM !== 'undefined' ? FFmpegWASM : null;
+const FFmpegU = typeof FFmpegUtil !== 'undefined' ? FFmpegUtil : null;
+const { FFmpeg } = (FFmpegW || {});
+const { fetchFile: _fetchFile, toBlobURL } = (FFmpegU || {});
+
+// Fallback fetchFile using native fetch
+async function fetchFile(input) {
+  if (_fetchFile) return _fetchFile(input);
+  if (input instanceof File || input instanceof Blob) {
+    return new Uint8Array(await input.arrayBuffer());
+  }
+  const res = await fetch(input);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+let ffmpeg = null;
+let ffmpegReady = false;
+const ffmpegStatus = document.getElementById('ffmpegStatus');
+const ffmpegLoadPct = document.getElementById('ffmpegLoadPct');
+
+if (!FFmpeg) {
+  ffmpegReady = false;
+  ffmpegStatus.style.display = 'block';
+  ffmpegStatus.innerHTML = 'ffmpeg.wasm CDN failed to load. <a href="#" onclick="location.reload()">Reload page</a>';
+  ffmpegStatus.style.color = '#ef4444';
+  console.error('FFmpegWASM not found — CDN script may be blocked');
+} else {
+  ffmpeg = new FFmpeg();
+
+  async function loadFFmpeg() {
+    ffmpegStatus.style.display = 'block';
+    ffmpegLoadPct.textContent = 'downloading (~31 MB)...';
+
+    ffmpeg.on('log', ({ message }) => { console.debug('[ffmpeg]', message); });
+    ffmpeg.on('progress', ({ progress }) => {
+      ffmpegLoadPct.textContent = Math.round(progress * 100) + '%';
+    });
+
+    await ffmpeg.load({
+      coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.js',
+      wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.wasm',
+    });
+
+    ffmpegReady = true;
+    ffmpegStatus.style.display = 'none';
+    updateButtons();
+  }
+
+  loadFFmpeg().catch(e => {
+    const msg = e?.message || e?.toString() || String(e) || 'unknown';
+    console.error('ffmpeg.wasm error:', e, 'stack:', e?.stack);
+    ffmpegStatus.innerHTML = `ffmpeg.wasm failed: ${esc(msg)}. <a href="#" onclick="loadFFmpeg();return false">Retry</a>`;
+    ffmpegStatus.style.color = '#ef4444';
+  });
+}
+
+// ── DOM refs ────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const imgDropzone = $('imgDropzone'); const imgInput = $('imgInput');
+const imgQueue = $('imgQueue'); const imgCount = $('imgCount');
+const tplListLogo = $('tplListLogo'); const tplListDisclaimer = $('tplListDisclaimer');
+const voiceDrop = $('voiceDrop'); const voiceInput = $('voiceInput');
+const voiceLabel = $('voiceLabel');
+const voiceVol = $('voiceVol');
+const musicDrop = $('musicDrop'); const musicInput = $('musicInput');
+const musicLabel = $('musicLabel');
+const musicVol = $('musicVol');
+const btnMerge = $('btnMerge'); const btnDownload = $('btnDownload');
+const mergeProgress = $('mergeProgress');
+const globalProgressWrap = $('globalProgressWrap');
+const globalProgressBar = $('globalProgressBar');
+const videoPlayer = $('videoPlayer'); const placeholder = $('placeholder');
+const fileList = $('fileList');
+const imgModeToggle = $('imgModeToggle'); const genPrompt = $('genPrompt');
+const genModel = $('genModel');
+const btnGenerate = $('btnGenerate'); const genStatusMsg = $('genStatusMsg');
+const uploadSection = $('uploadSection'); const generateSection = $('generateSection');
+const upload34Section = $('upload34Section');
+const img34Dropzone = $('img34Dropzone'); const img34Input = $('img34Input');
+const outpaint34StatusMsg = $('outpaint34StatusMsg');
+const overlayAdjustListLogo = $('overlayAdjustListLogo');
+const overlayAdjustListDisclaimer = $('overlayAdjustListDisclaimer');
+
+// Image Bitmap & Template Cache to avoid re-decoding and eliminate flickering
+const bitmapCache = new WeakMap();
+
+async function getCachedBitmap(file) {
+  if (!file) return null;
+  if (bitmapCache.has(file)) return bitmapCache.get(file);
+  try {
+    const bm = await createImageBitmap(file);
+    bitmapCache.set(file, bm);
+    return bm;
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── Image mode toggle: Upload 9:16 / Upload 3:4 (auto-outpaint) / AI Generate ─
+let imgModeValue = 'upload916';
+imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    imgModeValue = btn.dataset.mode;
+    imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
+    uploadSection.style.display = imgModeValue === 'upload916' ? '' : 'none';
+    upload34Section.style.display = imgModeValue === 'upload34' ? '' : 'none';
+    generateSection.style.display = imgModeValue === 'generate' ? '' : 'none';
+    updateButtons();
+  });
+});
+
+// ── local state ─────────────────────────────────────────────
+let images = [];        // { id, name, file, blobUrl, logoYSlider, logoScale, discYSlider, discScale }
+let voiceFile = null;
+let musicFile = null;
+let voiceVolume = 100;
+let musicVolume = 100;
+let outputFiles = [];   // { name, blob, blobUrl }
+
+// Two independent overlay slots — templates are split by filename ("LOGO" -> logo, everything
+// else -> disclaimer). Each slot keeps its own selection, grouped templates and resolved blobs/bitmaps.
+// Auto light/dark groups (e.g. "SMRT_ELEC_dark.png" + "SMRT_ELEC_light.png" -> "SMRT_ELEC") are
+// per-slot too, but the per-image tone (dark/light) is shared since it only depends on image brightness.
+const overlayState = {
+  logo: { selectedTemplateId: null, activeTplBlob: null, activeTplBitmap: null, selectedAutoGroup: null, templateGroups: {}, grouped: { groups: {}, standalone: [] } },
+  disclaimer: { selectedTemplateId: null, activeTplBlob: null, activeTplBitmap: null, selectedAutoGroup: null, templateGroups: {}, grouped: { groups: {}, standalone: [] } },
+};
+
+function uid() { return crypto.randomUUID().slice(0, 8); }
+
+// ── helpers ─────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ── Drag & Drop ─────────────────────────────────────────────
+function setupDrop(el, inputEl, onFiles) {
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dragover');
+    if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+  });
+  el.addEventListener('click', () => inputEl.click());
+  inputEl.addEventListener('change', () => {
+    if (inputEl.files.length) { onFiles(inputEl.files); inputEl.value = ''; }
+  });
+}
+
+// ── Images ──────────────────────────────────────────────────
+// Все изображения, которые попадают в слайд-шоу (что напрямую загружены в 9:16,
+// что пришли из аутпеинта 3:4), нормализуются к единому холсту 1080x1920 (cover-fit,
+// обрезка по центру) — так видео всегда склеивается в одном разрешении независимо
+// от исходного файла.
+const TARGET_W = 1080, TARGET_H = 1920;
+
+async function normalizeTo1080x1920(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = new OffscreenCanvas(TARGET_W, TARGET_H);
+  const ctx = canvas.getContext('2d');
+  const scale = Math.max(TARGET_W / bitmap.width, TARGET_H / bitmap.height); // cover-fit
+  const dw = Math.round(bitmap.width * scale);
+  const dh = Math.round(bitmap.height * scale);
+  const dx = Math.round((TARGET_W - dw) / 2);
+  const dy = Math.round((TARGET_H - dh) / 2);
+  ctx.drawImage(bitmap, dx, dy, dw, dh);
+  bitmap.close();
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  const base = file.name.replace(/\.[^.]+$/, '');
+  return new File([blob], `${base}-1080x1920.png`, { type: 'image/png' });
+}
+
+function createPlaceholderEntry(name, blobUrl, size, statusLabel) {
+  const entry = {
+    id: uid(), name, file: null, blobUrl, size: size || 0,
+    logoYSlider: 640, logoScale: 100,   // default center (range 20-1260), default 100%
+    discYSlider: 640, discScale: 100,
+    status: 'processing', statusLabel: statusLabel || 'Обработка…',
+  };
+  images.unshift(entry); // новые загрузки — всегда первыми в списке
+  renderImages();
+  return entry;
+}
+
+function finalizeEntry(id, file, displayName) {
+  const entry = images.find(i => i.id === id);
+  if (!entry) return; // пользователь уже убрал карточку, пока шла обработка
+  URL.revokeObjectURL(entry.blobUrl);
+  entry.file = file;
+  entry.blobUrl = URL.createObjectURL(file);
+  entry.size = file.size;
+  entry.name = displayName || file.name;
+  entry.status = 'ready';
+  renderImages();
+}
+
+function failEntry(id) {
+  const idx = images.findIndex(i => i.id === id);
+  if (idx < 0) return;
+  URL.revokeObjectURL(images[idx].blobUrl);
+  images.splice(idx, 1);
+  renderImages();
+}
+
+async function addImages(files) {
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  for (const f of imgFiles) {
+    if (images.length >= 50) break;
+    const blobUrl = URL.createObjectURL(f);
+    const entry = createPlaceholderEntry(f.name, blobUrl, f.size, 'Масштабирование до 1080×1920…');
+    try {
+      const normalized = await normalizeTo1080x1920(f);
+      finalizeEntry(entry.id, normalized, f.name);
+    } catch (e) {
+      console.error('normalize failed', e);
+      failEntry(entry.id);
+    }
+  }
+}
+
+function removeImage(id) {
+  const idx = images.findIndex(i => i.id === id);
+  if (idx >= 0) {
+    URL.revokeObjectURL(images[idx].blobUrl);
+    images.splice(idx, 1);
+  }
+  renderImages();
+}
+
+function renderImages() {
+  imgQueue.innerHTML = images.map(img => `
+    <div class="img-item${img.status === 'processing' ? ' processing' : ''}">
+      <div class="img-thumb">
+        <img src="${img.blobUrl}" loading="lazy">
+        ${img.status === 'processing' ? '<div class="spinner-overlay"><div class="sc-spinner"></div></div>' : ''}
+      </div>
+      <div class="info">
+        <span class="name">${esc(img.name)}</span>
+        <span class="size">${img.status === 'processing' ? (img.statusLabel || 'Обработка…') : fmtSize(img.size)}</span>
+      </div>
+      <button class="del" data-id="${img.id}">✕</button>
+    </div>
+  `).join('');
+  imgCount.textContent = `${images.length} / 50`;
+  imgQueue.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', () => removeImage(btn.dataset.id));
+  });
+  updateButtons();
+  renderOverlayAdjustList('logo');
+  renderOverlayAdjustList('disclaimer');
+}
+setupDrop(imgDropzone, imgInput, addImages);
+
+// ── Upload 3:4: ready-made save-zone creatives → auto-outpaint to 9:16 ─────
+// Карточка появляется сразу (превью 3:4, размыто + спиннер), пока идёт сетевой
+// аутпеинт; после ответа результат ещё раз прогоняется через normalizeTo1080x1920 —
+// это гарантирует итог ровно 1080x1920 независимо от того, что вернул сервер/Flux.
+async function addImages34(files) {
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  for (const f of imgFiles) {
+    if (images.length >= 50) break;
+    const blobUrl = URL.createObjectURL(f);
+    const entry = createPlaceholderEntry(f.name, blobUrl, f.size, 'Аутпеинт до 9:16…');
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await fetch('api/outpaint-upload', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Outpaint failed');
+      const data = await res.json();
+      const imgRes = await fetch(data.url);
+      const blob = await imgRes.blob();
+      const outFile = new File([blob], f.name.replace(/\.[^.]+$/, '') + '-9x16.png', { type: 'image/png' });
+      const normalized = await normalizeTo1080x1920(outFile); // явный апскейл/нормализация до 1080x1920
+      finalizeEntry(entry.id, normalized, outFile.name);
+    } catch (e) {
+      failEntry(entry.id);
+      outpaint34StatusMsg.style.display = 'block';
+      outpaint34StatusMsg.style.color = '#ef4444';
+      outpaint34StatusMsg.textContent = `Error (${f.name}): ${e.message}`;
+      setTimeout(() => { outpaint34StatusMsg.style.display = 'none'; }, 3000);
+    }
+  }
+}
+setupDrop(img34Dropzone, img34Input, addImages34);
+
+// ── Audio ───────────────────────────────────────────────────
+function setVoiceFile(file) {
+  voiceFile = file;
+  voiceLabel.textContent = '✓ ' + file.name;
+  voiceDrop.classList.add('loaded');
+  updateButtons();
+}
+
+function setMusicFile(file) {
+  musicFile = file;
+  musicLabel.textContent = '✓ ' + file.name;
+  musicDrop.classList.add('loaded');
+  updateButtons();
+}
+
+function handleAudioDrop(type, files) {
+  const f = Array.from(files).find(x => 
+    x.type.startsWith('audio/') || x.type.startsWith('video/') ||
+    x.name.match(/\.(mp3|wav|ogg|m4a|aac|flac|mp4|webm|mkv|mov)$/i)
+  );
+  if (f) type === 'voice' ? setVoiceFile(f) : setMusicFile(f);
+}
+setupDrop(voiceDrop, voiceInput, f => handleAudioDrop('voice', f));
+setupDrop(musicDrop, musicInput, f => handleAudioDrop('music', f));
+
+voiceVol.addEventListener('input', () => { voiceVolume = +voiceVol.value; });
+musicVol.addEventListener('input', () => { musicVolume = +musicVol.value; });
+
+// ── Templates ───────────────────────────────────────────────
+async function loadTemplates() {
+  const res = await fetch('api/templates');
+  return await res.json();
+}
+
+// Split all templates by filename: anything containing "LOGO" -> logo slot, everything else -> disclaimer.
+function categorizeTemplates(tpls) {
+  const logo = [], disclaimer = [];
+  for (const t of tpls) (/logo/i.test(t.name) ? logo : disclaimer).push(t);
+  return { logo, disclaimer };
+}
+
+// Group templates named "<base>_dark.ext" / "<base>_light.ext" into one auto entry.
+function groupTemplates(tpls) {
+  const groups = {};
+  const standalone = [];
+  const suffixRe = /^(.*)_(dark|light)$/i;
+  for (const t of tpls) {
+    const stem = t.name.replace(/\.\w+$/, '');
+    const m = stem.match(suffixRe);
+    if (m) {
+      const base = m[1];
+      const tone = m[2].toLowerCase();
+      (groups[base] = groups[base] || {})[tone] = t;
+    } else {
+      standalone.push(t);
+    }
+  }
+  return { groups, standalone };
+}
+
+async function deleteTemplate(id) {
+  await fetch(`api/templates/${id}`, { method: 'DELETE' });
+  for (const slot of ['logo', 'disclaimer']) {
+    const st = overlayState[slot];
+    if (st.selectedTemplateId === id) {
+      st.selectedTemplateId = null;
+      st.activeTplBlob = null;
+      st.activeTplBitmap = null;
+    }
+  }
+  await refreshTemplates();
+}
+
+async function deleteTemplateGroup(slot, base) {
+  const st = overlayState[slot];
+  const g = st.templateGroups[base];
+  if (!g) return;
+  const ids = [g.dark?.id, g.light?.id].filter(Boolean);
+  await Promise.all(ids.map(id => fetch(`api/templates/${id}`, { method: 'DELETE' })));
+  if (st.selectedTemplateId === 'auto:' + base) {
+    st.selectedTemplateId = null;
+    st.selectedAutoGroup = null;
+  }
+  await refreshTemplates();
+}
+
+async function loadAutoGroup(slot, base) {
+  const st = overlayState[slot];
+  const g = st.templateGroups[base] || {};
+  const darkBlob = g.dark ? await getTemplateBlob(g.dark.id) : null;
+  const lightBlob = g.light ? await getTemplateBlob(g.light.id) : null;
+  st.selectedAutoGroup = {
+    base,
+    darkBlob, lightBlob,
+    darkBitmap: darkBlob ? await createImageBitmap(darkBlob) : null,
+    lightBitmap: lightBlob ? await createImageBitmap(lightBlob) : null,
+  };
+  st.activeTplBlob = null;
+  st.activeTplBitmap = null;
+}
+
+async function selectTemplate(slot, id) {
+  const st = overlayState[slot];
+  st.selectedTemplateId = (id === st.selectedTemplateId) ? null : id;
+
+  if (st.selectedTemplateId && st.selectedTemplateId.startsWith('auto:')) {
+    await loadAutoGroup(slot, st.selectedTemplateId.slice(5));
+  } else {
+    st.selectedAutoGroup = null;
+    if (st.selectedTemplateId) {
+      st.activeTplBlob = await getTemplateBlob(st.selectedTemplateId);
+      st.activeTplBitmap = st.activeTplBlob ? await createImageBitmap(st.activeTplBlob) : null;
+    } else {
+      st.activeTplBlob = null;
+      st.activeTplBitmap = null;
+    }
+  }
+  renderTemplateList(slot);
+  renderOverlayAdjustList(slot);
+}
+
+async function refreshTemplates() {
+  const tpls = await loadTemplates();
+  window._tplCache = tpls;
+  const cat = categorizeTemplates(tpls);
+
+  for (const slot of ['logo', 'disclaimer']) {
+    const st = overlayState[slot];
+    st.grouped = groupTemplates(cat[slot]);
+    st.templateGroups = st.grouped.groups;
+    if (st.selectedTemplateId && st.selectedTemplateId.startsWith('auto:')) {
+      await loadAutoGroup(slot, st.selectedTemplateId.slice(5));
+    } else if (st.selectedTemplateId) {
+      st.activeTplBlob = await getTemplateBlob(st.selectedTemplateId);
+      st.activeTplBitmap = st.activeTplBlob ? await createImageBitmap(st.activeTplBlob) : null;
+    }
+    renderTemplateList(slot);
+    renderOverlayAdjustList(slot);
+  }
+}
+
+function renderTemplateList(slot) {
+  const st = overlayState[slot];
+  const container = slot === 'logo' ? tplListLogo : tplListDisclaimer;
+  const { groups, standalone } = st.grouped;
+  const hasAny = Object.keys(groups).length || standalone.length;
+
+  let html = `<div class="tpl-item ${!st.selectedTemplateId ? 'active' : ''}" data-id="">
+    <input type="radio" name="tpl-${slot}" ${!st.selectedTemplateId ? 'checked' : ''} style="accent-color:var(--accent-blue)">
+    <span class="name" style="color:var(--text-muted);font-style:italic">None (Skip overlay)</span>
+  </div>`;
+
+  html += Object.entries(groups).map(([base, g]) => {
+    const gid = 'auto:' + base;
+    const active = st.selectedTemplateId === gid;
+    return `
+    <div class="tpl-item tpl-item-auto ${active ? 'active' : ''}" data-id="${esc(gid)}">
+      <input type="radio" name="tpl-${slot}" ${active ? 'checked' : ''} style="accent-color:var(--accent-blue)">
+      <span class="name">${esc(base)}<span class="tpl-auto-badge">Auto light/dark</span></span>
+      <button class="del" data-del-group="${esc(base)}" title="Delete both variants">✕</button>
+    </div>`;
+  }).join('');
+
+  html += standalone.map(t => `
+    <div class="tpl-item ${st.selectedTemplateId === t.id ? 'active' : ''}" data-id="${t.id}">
+      <input type="radio" name="tpl-${slot}" ${st.selectedTemplateId === t.id ? 'checked' : ''} style="accent-color:var(--accent-blue)">
+      <img src="templates/${t.id}.png" onerror="this.src='templates/${t.id}.webp'" loading="lazy">
+      <span class="name">${esc(t.name)}</span>
+      <button class="del" data-del="${t.id}">✕</button>
+    </div>
+  `).join('');
+
+  if (!hasAny) html += '<div class="tpl-none">No templates yet.</div>';
+
+  container.innerHTML = html;
+  container.querySelectorAll('.tpl-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('del')) return;
+      selectTemplate(slot, el.dataset.id || null);
+    });
+  });
+  container.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (btn.dataset.delGroup) deleteTemplateGroup(slot, btn.dataset.delGroup);
+      else deleteTemplate(btn.dataset.del);
+    });
+  });
+}
+
+// ── Auto light/dark tone detection ─────────────────────────
+// Dark input image -> use the "light" (bright) overlay variant for contrast, and vice versa.
+// Tone depends only on the image itself, so it's computed once and shared by both overlay slots.
+function computeBrightness(bitmap) {
+  const w = 100, h = 100;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let total = 0, count = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue; // skip transparent pixels
+    total += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    count++;
+  }
+  return count ? total / count : 128;
+}
+
+async function computeImageTone(img) {
+  if (img.overlayTone) return img.overlayTone;
+  const bitmap = await getCachedBitmap(img.file);
+  const brightness = bitmap ? computeBrightness(bitmap) : 128;
+  img.overlayBrightness = brightness;
+  img.overlayTone = brightness < 128 ? 'light' : 'dark';
+  return img.overlayTone;
+}
+
+function getOverlayBitmapForImage(slot, img) {
+  const st = overlayState[slot];
+  if (st.selectedAutoGroup) {
+    if (!img.overlayTone) return null;
+    return img.overlayTone === 'dark' ? st.selectedAutoGroup.darkBitmap : st.selectedAutoGroup.lightBitmap;
+  }
+  return st.activeTplBitmap;
+}
+
+function getOverlayBlobForImage(slot, img) {
+  const st = overlayState[slot];
+  if (st.selectedAutoGroup) {
+    return img.overlayTone === 'dark' ? st.selectedAutoGroup.darkBlob : st.selectedAutoGroup.lightBlob;
+  }
+  return st.activeTplBlob;
+}
+
+// ── Column 3.1 / 3.2: Render Overlay Adjustment Lists (logo / disclaimer) ──
+const OVERLAY_SLOT_LABEL = { logo: 'logo', disclaimer: 'disclaimer' };
+const OVERLAY_SLOT_KEYS = {
+  logo: { y: 'logoYSlider', scale: 'logoScale' },
+  disclaimer: { y: 'discYSlider', scale: 'discScale' },
+};
+
+function renderOverlayAdjustList(slot) {
+  const st = overlayState[slot];
+  const container = slot === 'logo' ? overlayAdjustListLogo : overlayAdjustListDisclaimer;
+  const keys = OVERLAY_SLOT_KEYS[slot];
+
+  if (!st.selectedTemplateId) {
+    container.innerHTML = `
+      <div class="tpl-none">
+        Select a ${OVERLAY_SLOT_LABEL[slot]} overlay in Step 2 to enable position & size controls per image.
+      </div>`;
+    return;
+  }
+  if (!images.length) {
+    container.innerHTML = `
+      <div class="tpl-none">
+        Add or generate images in Step 1 to adjust overlay position & size.
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = images.map((img, idx) => `
+    <div class="adjust-card" data-idx="${idx}">
+      <div class="adjust-card-header">${idx + 1}. ${esc(img.name)}${st.selectedAutoGroup ? ` <span class="tone-badge" id="toneBadge-${slot}-${idx}">${img.overlayTone ? `[auto: ${img.overlayTone}]` : '[detecting…]'}</span>` : ''}</div>
+      <div class="adjust-card-body">
+        <div class="adjust-preview-box">
+          <canvas width="216" height="384" class="adjust-canvas" data-idx="${idx}"></canvas>
+        </div>
+        <div class="adjust-sliders-wrap">
+          <div class="v-slider-control">
+            <span class="v-slider-label">H</span>
+            <input type="range" class="v-slider y-slider" min="20" max="1260" value="${img[keys.y] ?? 640}" data-idx="${idx}">
+          </div>
+          <div class="v-slider-control">
+            <span class="v-slider-label">S</span>
+            <input type="range" class="v-slider scale-slider" min="10" max="200" value="${img[keys.scale] ?? 100}" data-idx="${idx}">
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Attach slider listeners & update canvas previews synchronously via Cached Bitmaps
+  container.querySelectorAll('.adjust-card').forEach(card => {
+    const idx = +card.dataset.idx;
+    const img = images[idx];
+    const canvas = card.querySelector('.adjust-canvas');
+    const ySlider = card.querySelector('.y-slider');
+    const scaleSlider = card.querySelector('.scale-slider');
+
+    const redraw = () => updateAdjustCanvasSync(slot, img, canvas);
+
+    ySlider.addEventListener('input', () => {
+      img[keys.y] = +ySlider.value;
+      redraw();
+    });
+
+    scaleSlider.addEventListener('input', () => {
+      img[keys.scale] = +scaleSlider.value;
+      redraw();
+    });
+
+    // Initial async decode then render
+    getCachedBitmap(img.file).then(async () => {
+      if (st.selectedAutoGroup && !img.overlayTone) {
+        await computeImageTone(img);
+        // tone is shared across slots — refresh the badge in whichever column(s) show it
+        ['logo', 'disclaimer'].forEach(s => {
+          const badge = document.getElementById(`toneBadge-${s}-${idx}`);
+          if (badge) badge.textContent = `[auto: ${img.overlayTone}]`;
+        });
+      }
+      redraw();
+    });
+  });
+}
+
+function updateAdjustCanvasSync(slot, img, canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;  // 216
+  const h = canvas.height; // 384 (9:16)
+  const keys = OVERLAY_SLOT_KEYS[slot];
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, w, h);
+
+  const imgBitmap = img.file ? bitmapCache.get(img.file) : null;
+
+  if (imgBitmap) {
+    const scale = Math.min(w / imgBitmap.width, h / imgBitmap.height);
+    const dw = Math.round(imgBitmap.width * scale);
+    const dh = Math.round(imgBitmap.height * scale);
+    const dx = Math.round((w - dw) / 2);
+    const dy = Math.round((h - dh) / 2);
+    ctx.drawImage(imgBitmap, dx, dy, dw, dh);
+  }
+
+  const tplBitmap = getOverlayBitmapForImage(slot, img);
+  if (tplBitmap) {
+    const tplScaleRatio = Math.min(w / tplBitmap.width, h / tplBitmap.height);
+    const userScale = (img[keys.scale] ?? 100) / 100;
+    const ow = Math.round(tplBitmap.width * tplScaleRatio * userScale);
+    const oh = Math.round(tplBitmap.height * tplScaleRatio * userScale);
+    const ox = Math.round((w - ow) / 2);
+
+    const sliderVal = img[keys.y] ?? 640;
+    const yCenterNorm = (1280 - sliderVal) / 1280;
+    const oy = Math.round(yCenterNorm * h - (oh / 2));
+    ctx.drawImage(tplBitmap, ox, oy, ow, oh);
+  }
+}
+
+// ── Buttons ─────────────────────────────────────────────────
+function updateButtons() {
+  const hasAudio = voiceFile || musicFile;
+  btnMerge.disabled = !hasAudio || images.length === 0;
+  btnDownload.disabled = outputFiles.length === 0;
+  btnGenerate.disabled = genPrompt.value.trim().length === 0;
+}
+updateButtons();
+
+genPrompt.addEventListener('input', updateButtons);
+
+// ── AI Generate: save-zone creative → auto-outpaint to 9:16 ─
+async function generateCreative() {
+  const prompt = genPrompt.value.trim();
+  if (!prompt) return;
+  btnGenerate.disabled = true;
+  genStatusMsg.style.display = 'block';
+  genStatusMsg.style.color = 'var(--text-muted)';
+  genStatusMsg.textContent = 'Generating save-zone creative (1080×1350)…';
+  try {
+    const fd = new FormData();
+    fd.append('prompt', prompt);
+    fd.append('model', genModel.value);
+    const res = await fetch('api/generate-creative', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Generation failed');
+    genStatusMsg.textContent = 'Outpainting background to 9:16…';
+    const data = await res.json();
+    const imgRes = await fetch(data.url);
+    const blob = await imgRes.blob();
+    const file = new File([blob], `creative-${Date.now()}.png`, { type: 'image/png' });
+    addImages([file]);
+    genStatusMsg.textContent = '✓ Added to queue.';
+    setTimeout(() => { genStatusMsg.style.display = 'none'; }, 2500);
+  } catch (e) {
+    genStatusMsg.style.color = '#ef4444';
+    genStatusMsg.textContent = 'Error: ' + e.message;
+  } finally {
+    updateButtons();
+  }
+}
+btnGenerate.addEventListener('click', generateCreative);
+
+// ── WebCodecs pipeline ──────────────────────────────────────
+const hasWebCodecs = typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined';
+if (hasWebCodecs) {
+  console.log('Using WebCodecs (hardware-accelerated)');
+  if (ffmpegStatus) ffmpegStatus.style.display = 'none';
+  updateButtons();
+}
+
+async function getTemplateBlob(id) {
+  if (!id) return null;
+  const tpls = window._tplCache || [];
+  const t = tpls.find(x => x.id === id);
+  if (!t) return null;
+  const ext = t.name.match(/\.\w+$/)?.[0] || '.png';
+  const res = await fetch(`templates/${id}${ext}`);
+  return await res.blob();
+}
+
+// Audio mixing via Web Audio API
+async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
+  const decode = async (file) => {
+    const buf = await file.arrayBuffer();
+    return new AudioContext().decodeAudioData(buf);
+  };
+  
+  const [voiceBuf, musicBuf] = await Promise.all([
+    voiceFile ? decode(voiceFile) : null,
+    musicFile ? decode(musicFile) : null,
+  ]);
+
+  const voiceLen = voiceBuf ? voiceBuf.duration : 0;
+  const musicLen = musicBuf ? musicBuf.duration : 0;
+  const totalLen = Math.max(voiceLen, musicLen);
+  const sampleRate = Math.max(
+    voiceBuf?.sampleRate || 48000,
+    musicBuf?.sampleRate || 48000
+  );
+
+  const offlineCtx = new OfflineAudioContext(2, Math.ceil(totalLen * sampleRate), sampleRate);
+
+  if (voiceBuf) {
+    const src = offlineCtx.createBufferSource();
+    src.buffer = voiceBuf;
+    const gain = offlineCtx.createGain();
+    gain.gain.value = voiceVol / 100;
+    src.connect(gain).connect(offlineCtx.destination);
+    src.start(0);
+  }
+
+  if (musicBuf) {
+    const src = offlineCtx.createBufferSource();
+    src.buffer = musicBuf;
+    const gain = offlineCtx.createGain();
+    gain.gain.value = musicVol / 100;
+    src.connect(gain).connect(offlineCtx.destination);
+    src.start(0);
+  }
+
+  const rendered = await offlineCtx.startRendering();
+  return rendered;
+}
+
+// Render one image → MP4 blob. `overlays` is drawn in order (e.g. logo, then disclaimer on top).
+async function renderOneVideo(imgFile, overlays, audioBuf) {
+  // Force 1080x1920 (9:16 vertical) — все входы (Upload 9:16, Upload 3:4 после
+  // outpaint+нормализации) уже приведены к этому холсту, так что здесь просто
+  // финальный контейнер, без даунскейла.
+  const width = TARGET_W;
+  const height = TARGET_H;
+
+  const imgBitmap = await createImageBitmap(imgFile);
+
+  const overlayBitmaps = await Promise.all(overlays.map(async o => {
+    if (!o.blob) return null;
+    return { bitmap: await createImageBitmap(o.blob), ySlider: o.ySlider, scale: o.scale };
+  }));
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // Black background
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, width, height);
+
+  // Contain scaling
+  const scale = Math.min(width / imgBitmap.width, height / imgBitmap.height);
+  const dw = Math.round(imgBitmap.width * scale);
+  const dh = Math.round(imgBitmap.height * scale);
+  const dx = Math.round((width - dw) / 2);
+  const dy = Math.round((height - dh) / 2);
+  ctx.drawImage(imgBitmap, dx, dy, dw, dh);
+
+  for (const ov of overlayBitmaps) {
+    if (!ov) continue;
+    const tplScaleRatio = Math.min(width / ov.bitmap.width, height / ov.bitmap.height);
+    const userScale = ov.scale / 100;
+    const ow = Math.round(ov.bitmap.width * tplScaleRatio * userScale);
+    const oh = Math.round(ov.bitmap.height * tplScaleRatio * userScale);
+    const ox = Math.round((width - ow) / 2);
+
+    const yCenterNorm = (1280 - ov.ySlider) / 1280;
+    const oy = Math.round(yCenterNorm * height - (oh / 2));
+    ctx.drawImage(ov.bitmap, ox, oy, ow, oh);
+  }
+
+  const frameBitmap = canvas.transferToImageBitmap();
+  const frame = new VideoFrame(frameBitmap, {
+    timestamp: 0,
+    duration: Math.round(audioBuf.duration * 1_000_000),
+  });
+  frameBitmap.close();
+
+  const muxerTarget = new Mp4Muxer.ArrayBufferTarget();
+  const muxer = new Mp4Muxer.Muxer({
+    target: muxerTarget,
+    video: { codec: 'avc', width, height },
+    audio: { codec: 'aac', numberOfChannels: audioBuf.numberOfChannels, sampleRate: audioBuf.sampleRate },
+    fastStart: 'in-memory',
+  });
+
+  const videoEncoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: e => { throw e; },
+  });
+  videoEncoder.configure({
+    codec: 'avc1.420028',
+    width, height,
+    bitrate: 1_100_000, // было 500k на 720x1280 — пропорционально росту разрешения (~2.25x пикселей)
+    framerate: 1,
+  });
+
+  const audioEncoder = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error: e => { throw e; },
+  });
+  audioEncoder.configure({
+    codec: 'mp4a.40.2',
+    numberOfChannels: audioBuf.numberOfChannels,
+    sampleRate: audioBuf.sampleRate,
+    bitrate: 128_000,
+  });
+
+  videoEncoder.encode(frame, { keyFrame: true });
+  await videoEncoder.flush();
+  videoEncoder.close();
+  frame.close();
+
+  const audioData = createAudioData(audioBuf);
+  audioEncoder.encode(audioData);
+  await audioEncoder.flush();
+  audioEncoder.close();
+  audioData.close();
+
+  muxer.finalize();
+
+  imgBitmap.close();
+  overlayBitmaps.forEach(ov => ov && ov.bitmap.close());
+
+  return new Blob([muxerTarget.buffer], { type: 'video/mp4' });
+}
+
+// Helper: AudioBuffer → AudioData
+function createAudioData(buf) {
+  const ch = buf.numberOfChannels;
+  const len = buf.length;
+  const data = new Float32Array(ch * len);
+  for (let c = 0; c < ch; c++) {
+    const chan = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) data[i * ch + c] = chan[i];
+  }
+  return new AudioData({
+    format: 'f32',
+    sampleRate: buf.sampleRate,
+    numberOfFrames: len,
+    numberOfChannels: ch,
+    timestamp: 0,
+    data,
+  });
+}
+
+btnMerge.addEventListener('click', async () => {
+  if (!hasWebCodecs) { alert('Your browser does not support WebCodecs. Use Chrome/Edge.'); return; }
+  btnMerge.disabled = true;
+  btnDownload.disabled = true;
+  outputFiles = [];
+  renderOutputFiles();
+
+  const totalSteps = 1 + images.length;
+  let currentStep = 0;
+  const statusEl = mergeProgress;
+  const barEl = globalProgressBar;
+  const wrapEl = globalProgressWrap;
+
+  function updateProgress(text, stepDone) {
+    if (stepDone !== undefined) currentStep = stepDone;
+    const pct = Math.round((currentStep / totalSteps) * 100);
+    wrapEl.style.display = 'block';
+    barEl.className = 'progress-bar';
+    barEl.style.width = pct + '%';
+    statusEl.style.display = 'inline';
+    statusEl.className = 'status-bar processing';
+    statusEl.textContent = text;
+  }
+
+  try {
+    updateProgress('Mixing audio tracks…', 0);
+    const mixedAudio = await mixAudio(voiceFile, musicFile, voiceVolume, musicVolume);
+
+    const logoBlobFixed = overlayState.logo.selectedAutoGroup ? null : await getTemplateBlob(overlayState.logo.selectedTemplateId);
+    const discBlobFixed = overlayState.disclaimer.selectedAutoGroup ? null : await getTemplateBlob(overlayState.disclaimer.selectedTemplateId);
+
+    for (let i = 0; i < images.length; i++) {
+      updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
+      const img = images[i];
+      if ((overlayState.logo.selectedAutoGroup || overlayState.disclaimer.selectedAutoGroup) && !img.overlayTone) {
+        await computeImageTone(img);
+      }
+      const logoBlob = overlayState.logo.selectedAutoGroup ? getOverlayBlobForImage('logo', img) : logoBlobFixed;
+      const discBlob = overlayState.disclaimer.selectedAutoGroup ? getOverlayBlobForImage('disclaimer', img) : discBlobFixed;
+      const mp4Blob = await renderOneVideo(
+        img.file,
+        [
+          { blob: logoBlob, ySlider: img.logoYSlider ?? 640, scale: img.logoScale ?? 100 },
+          { blob: discBlob, ySlider: img.discYSlider ?? 640, scale: img.discScale ?? 100 },
+        ],
+        mixedAudio
+      );
+      const blobUrl = URL.createObjectURL(mp4Blob);
+      outputFiles.push({
+        name: `${images[i].name.replace(/\.[^.]+$/, '')}.mp4`,
+        blob: mp4Blob,
+        blobUrl,
+      });
+    }
+
+    updateProgress(`Done — ${outputFiles.length} video(s) ready`, totalSteps);
+    barEl.className = 'progress-bar done';
+    statusEl.className = 'status-bar';
+    btnMerge.disabled = false;
+    btnDownload.disabled = false;
+    renderOutputFiles();
+  } catch (e) {
+    console.error(e);
+    updateProgress(`Error: ${e.message}`, currentStep);
+    barEl.className = 'progress-bar error';
+    statusEl.className = 'status-bar';
+    statusEl.style.color = '#ef4444';
+    btnMerge.disabled = false;
+  }
+});
+
+// ── Output / Preview ────────────────────────────────────────
+function renderOutputFiles() {
+  fileList.innerHTML = outputFiles.map((f, i) => `
+    <div class="file-item" data-idx="${i}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span>${esc(f.name)}</span>
+    </div>
+  `).join('');
+  fileList.querySelectorAll('.file-item').forEach(el => {
+    el.addEventListener('click', () => previewOutput(+el.dataset.idx));
+  });
+  if (outputFiles.length === 0) {
+    placeholder.style.display = 'flex';
+    videoPlayer.style.display = 'none';
+  } else {
+    previewOutput(0);
+  }
+}
+
+function previewOutput(idx) {
+  document.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
+  if (fileList.children[idx]) fileList.children[idx].classList.add('active');
+  placeholder.style.display = 'none';
+  videoPlayer.style.display = 'block';
+  videoPlayer.src = outputFiles[idx].blobUrl;
+  videoPlayer.play();
+}
+
+// ── Download ────────────────────────────────────────────────
+btnDownload.addEventListener('click', async () => {
+  if (!outputFiles.length) return;
+  const zip = new JSZip();
+  outputFiles.forEach(f => zip.file(f.name, f.blob));
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `audiopng-pack-${Date.now()}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// ── Init ────────────────────────────────────────────────────
+refreshTemplates();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "generation_output_schema.json",
+  "title": "NextCreativeBrief",
+  "description": "Synthesis-LLM output: a new 9:16 creative concept for one branch, with a compact 3-part reasoning trail and exactly one image-generation prompt (which one depends on the requested mode: gpt_image_2 / nano_banana_2 / universal).",
+  "type": "object",
+  "required": ["target_audience_niche", "concept_summary", "reasoning", "new_creative_copy", "design_spec", "image_prompt_gpt_image_2", "image_prompt_nano_banana_2", "universal_prompt"],
+  "additionalProperties": false,
+  "properties": {
+
+    "target_audience_niche": {
+      "type": "string",
+      "description": "Short (2-4 words) label for the audience segment/niche of the new creative, e.g. 'financial analysts' or 'kindergarten teachers'. Used by the script to check the concept doesn't repeat a niche already used for this branch."
+    },
+
+    "concept_summary": {
+      "type": "string",
+      "description": "1 sentence: the core idea of the new creative. Keep it tight."
+    },
+
+    "reasoning": {
+      "type": "object",
+      "description": "Compact 3-part reasoning trail. Each field is 1-3 sentences, not a list — name specific creative_id(s) inline where relevant instead of a separate array of entries.",
+      "required": ["reused", "avoided", "new_experiment"],
+      "additionalProperties": false,
+      "properties": {
+        "reused": { "type": "string", "description": "Which winning elements were reused, and from which creative_id(s) — brief, inline references." },
+        "avoided": { "type": "string", "description": "Which losing patterns were deliberately avoided, and from which creative_id(s)/marketer_element_feedback." },
+        "new_experiment": { "type": "string", "description": "What is genuinely new/untested in this concept compared to everything generated so far for this branch, and why it's worth testing now instead of repeating the safest known winner." }
+      }
+    },
+
+    "new_creative_copy": {
+      "type": "object",
+      "description": "Concrete, final copy for the new creative — not placeholders.",
+      "required": ["main_headline", "cta_text"],
+      "additionalProperties": false,
+      "properties": {
+        "main_headline": { "type": "string" },
+        "subheadline_tagline": { "type": ["string", "null"] },
+        "cta_text": { "type": "string" },
+        "step_labels": { "type": "array", "items": { "type": "string" }, "description": "Only fill in if design_spec.structure_type implies a list of steps/modules." }
+      }
+    },
+
+    "design_spec": {
+      "type": "object",
+      "required": ["creative_archetype", "layout_type", "color_palette", "typography_style", "structure_type"],
+      "additionalProperties": false,
+      "properties": {
+        "creative_archetype": { "type": "string", "enum": ["hero_photo_overlay", "multi_step_infographic_grid", "staircase_progression_diagram", "path_progression_diagram", "icon_tool_list", "flat_lay_product_collage", "flowchart_diagram", "dashboard_mockup_composite", "comparison_table", "testimonial_quote_card"] },
+        "layout_type": { "type": "string" },
+        "color_palette": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["hex", "name", "role"],
+            "properties": {
+              "hex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+              "name": { "type": "string" },
+              "role": { "type": "string", "enum": ["background", "accent", "cta", "text"] }
+            }
+          },
+          "minItems": 1
+        },
+        "typography_style": { "type": "string" },
+        "structure_type": { "type": "string", "enum": ["numbered_step_grid", "staircase_progression", "path_progression", "icon_tool_list", "weekly_checklist_grid", "flowchart_diagram", "comparison_table", "none"] },
+        "connector_style": { "type": "string", "enum": ["dashed_line", "solid_line", "arrow_chain", "staircase_steps", "winding_path_stones", "none"] },
+        "step_number_style": { "type": "string", "enum": ["digit_badge_circle", "digit_badge_square", "day_label_text", "pin_marker", "none"] },
+        "trust_badges": { "type": "array", "items": { "type": "string", "enum": ["certificate_icon", "graduation_cap", "ribbon_seal", "checkmark_badge", "star_rating", "none"] } },
+        "background_texture": { "type": "array", "items": { "type": "string", "enum": ["halftone_dots", "organic_blob_shapes", "circuit_tech_pattern", "hand_drawn_doodle", "geometric_grid", "gradient_mesh", "photographic", "solid_flat", "none"] } }
+      }
+    },
+
+    "image_prompt_gpt_image_2": {
+      "type": "string",
+      "description": "Ready-to-use prompt for GPT Image 2. Only present when mode='gpt_image_2'. Vivid descriptive prose (not a spec sheet): background/scene -> subject -> key details -> what stays fixed. Canvas format and proportions in plain words, NO pixel sizes. Literal text in quotes with typography described alongside. Never mention a brand logo or legal disclaimer — the designer adds those separately; don't even write a negative instruction about them, just omit."
+    },
+
+    "image_prompt_nano_banana_2": {
+      "type": "string",
+      "description": "Ready-to-use prompt for Nano Banana 2 (Gemini). Only present when mode='nano_banana_2'. Connected narrative prose (not a keyword list), opens with a strong verb, positive framing. Format/proportions in words, no pixels; aspect ratio 9:16 can be one short trailing phrase. Quoted literal text with font described in the same sentence. Never mention a brand logo or legal disclaimer — omit them silently, no negative instruction."
+    },
+
+    "universal_prompt": {
+      "type": "string",
+      "description": "Only present when mode='universal'. A shorter, model-agnostic descriptive prompt that isn't tuned to either model's specific formatting quirks — a solid general-purpose starting point usable with any image generator. Still: plain-language proportions (no pixels), quoted literal text, no brand logo, no legal disclaimer."
+    }
+  }
+}

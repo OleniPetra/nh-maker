@@ -1,0 +1,336 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "creative_extraction_schema.json",
+  "title": "StaticCreativeExtraction",
+  "description": "Структурированное описание одного статического креатива, выданное vision-LLM. Одна запись = один креатив в контексте одного branch. Если тот же визуал тестировался в другом branch — отдельная запись с тем же image_ref.",
+  "type": "object",
+  "required": ["creative_id", "branch", "creative_archetype", "performance", "format", "composition", "text_content", "typography", "color", "imagery", "branding", "graphic_elements", "informational_structure", "psychological_hooks", "marketer_note_raw", "marketer_element_feedback", "summary", "source_meta"],
+  "additionalProperties": false,
+  "properties": {
+
+    "creative_id": {
+      "type": "string",
+      "description": "Уникальный идентификатор записи (uuid или slug). Генерируется при добавлении, не LLM."
+    },
+
+    "branch": {
+      "type": "string",
+      "description": "Продуктовый branch — какой из продуктов/направлений представляет креатив. Часть ручного ввода (выбирается маркетологом при загрузке, не определяется LLM).",
+      "enum": ["certif", "claude", "aigen"]
+    },
+
+    "creative_archetype": {
+      "type": "string",
+      "description": "Структурный тип креатива целиком — определяет, какие остальные поля значимы. Это главная переменная для сравнения креативов между собой.",
+      "enum": ["hero_photo_overlay", "multi_step_infographic_grid", "staircase_progression_diagram", "path_progression_diagram", "icon_tool_list", "flat_lay_product_collage", "flowchart_diagram", "dashboard_mockup_composite", "comparison_table", "testimonial_quote_card"]
+    },
+
+    "performance": {
+      "type": "object",
+      "description": "Единственная оценка результата — ручной ввод маркетолога, 1-3. Метрики (CTR/CPA/...) сознательно не фиксируются: их неоткуда брать кроме ручного ввода, а ручной ввод ограничен только score.",
+      "required": ["score"],
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "1 = плохо, 2 = хорошо, 3 = отлично."
+        }
+      }
+    },
+
+    "format": {
+      "type": "object",
+      "required": ["aspect_ratio", "creative_type"],
+      "additionalProperties": false,
+      "properties": {
+        "aspect_ratio": { "type": "string", "examples": ["1:1", "4:5", "9:16", "16:9"] },
+        "resolution": { "type": ["string", "null"] },
+        "creative_type": { "type": "string", "enum": ["single_image", "carousel_frame", "collage"] }
+      }
+    },
+
+    "composition": {
+      "type": "object",
+      "required": ["layout_type", "visual_hierarchy", "focal_point"],
+      "additionalProperties": false,
+      "properties": {
+        "layout_type": {
+          "type": "string",
+          "description": "Тип раскладки. Примеры для ориентира (не строгий enum, т.к. вариантов много, но LLM должна выбирать короткое устойчивое обозначение, а не описательное предложение).",
+          "examples": ["centered_subject", "split_screen", "text_top_image_bottom", "text_overlay_full_bleed", "grid_collage", "before_after_split", "product_hero_center"]
+        },
+        "visual_hierarchy": {
+          "type": "array",
+          "description": "Порядок, в котором взгляд считывает элементы: 1-й, 2-й, 3-й...",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "focal_point": { "type": "string", "description": "Что является главным визуальным центром." },
+        "whitespace_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "framing_border": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "present": { "type": "boolean" },
+            "style": { "type": ["string", "null"] }
+          }
+        },
+        "symmetry": { "type": "string", "enum": ["symmetric", "asymmetric", "centered"] }
+      }
+    },
+
+    "text_content": {
+      "type": "object",
+      "description": "Основной блок для фиксации текста. text_blocks — исчерпывающий перечень ВСЕХ текстовых единиц на креативе (это приоритет №1 согласно ТЗ); cta/offer_details/price_display — дополнительные структурированные срезы для полей, где важны не только текст, но и стиль/тип.",
+      "required": ["text_blocks", "cta", "text_density", "copy_tone", "language"],
+      "additionalProperties": false,
+      "properties": {
+        "text_blocks": {
+          "type": "array",
+          "description": "Каждый отдельный текстовый блок на изображении — от главного заголовка до мелкого дисклеймера. Ничего не пропускать: заголовки шагов, подписи иконок, плашки, названия инструментов в списках, цифры на дашборд-мокапах и т.д.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["text", "role", "position", "size_relative"],
+            "additionalProperties": false,
+            "properties": {
+              "text": { "type": "string" },
+              "role": {
+                "type": "string",
+                "enum": ["main_headline", "subheadline_tagline", "section_header", "step_label", "step_description", "tool_list_entry", "cta_button_text", "badge_ribbon_text", "stat_or_price_text", "disclaimer_legal", "brand_wordmark", "caption_other"]
+              },
+              "position": { "type": "string", "examples": ["top_center", "card_3_of_10", "bottom_ribbon", "bottom_center"] },
+              "size_relative": { "type": "string", "enum": ["tiny", "small", "medium", "large", "dominant"] },
+              "style_notes": { "type": ["string", "null"], "description": "например: жирный, с обводкой, на цветной плашке, uppercase" }
+            }
+          }
+        },
+        "cta": {
+          "type": "object",
+          "description": "Дублирует соответствующий text_blocks[role=cta_button_text] по тексту, но добавляет визуальные атрибуты кнопки/плашки, которых нет в общем перечне.",
+          "additionalProperties": false,
+          "properties": {
+            "text": { "type": ["string", "null"] },
+            "type": { "type": "string", "enum": ["button", "text_only", "banner_sticker", "none"] },
+            "position": { "type": ["string", "null"] },
+            "color": { "type": ["string", "null"] },
+            "shape": { "type": ["string", "null"], "examples": ["rounded_rect", "pill", "circle", "none"] }
+          }
+        },
+        "offer_details": { "type": ["string", "null"], "description": "например: '-50%', 'первый месяц бесплатно', '2 по цене 1'" },
+        "price_display": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "present": { "type": "boolean" },
+            "format": { "type": ["string", "null"], "examples": ["strikethrough_old_new", "single_price", "from_price"] }
+          }
+        },
+        "disclaimer_legal_present": { "type": "boolean", "description": "Есть ли на креативе юридический дисклеймер/мелкий шрифт (например про товарные знаки третьих лиц). Сам текст — в text_blocks с role=disclaimer_legal." },
+        "text_density": { "type": "string", "enum": ["minimal", "moderate", "heavy"] },
+        "copy_tone": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["formal", "casual", "urgent", "humorous", "aspirational", "informative", "provocative", "friendly"] },
+          "minItems": 1
+        },
+        "language": { "type": "string", "examples": ["ru", "en"] }
+      }
+    },
+
+    "typography": {
+      "type": "object",
+      "required": ["primary_typeface_style", "font_weight", "text_case"],
+      "additionalProperties": false,
+      "properties": {
+        "primary_typeface_style": { "type": "string", "enum": ["serif", "sans_serif", "script", "display", "monospace", "handwritten"] },
+        "font_weight": { "type": "string", "enum": ["light", "regular", "bold", "black"] },
+        "text_case": { "type": "string", "enum": ["uppercase", "titlecase", "sentencecase", "mixed"] },
+        "hierarchy_notes": { "type": ["string", "null"], "description": "как размер/вес шрифта различает заголовок/тело/CTA" }
+      }
+    },
+
+    "color": {
+      "type": "object",
+      "required": ["dominant_colors", "background_type", "color_mood"],
+      "additionalProperties": false,
+      "properties": {
+        "dominant_colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["hex", "name"],
+            "properties": {
+              "hex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+              "name": { "type": "string" }
+            }
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "accent_colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+              "name": { "type": "string" }
+            }
+          }
+        },
+        "background_type": { "type": "string", "enum": ["solid", "gradient", "photo", "pattern", "transparent"] },
+        "background_texture": {
+          "type": "array",
+          "description": "Декоративная текстура/паттерн фона, если background_type='pattern' или поверх фото/градиента. Уточняет расплывчатое 'pattern' до конкретного визуального приёма.",
+          "items": { "type": "string", "enum": ["halftone_dots", "organic_blob_shapes", "circuit_tech_pattern", "hand_drawn_doodle", "geometric_grid", "gradient_mesh", "photographic", "solid_flat", "none"] }
+        },
+        "color_mood": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["warm", "cool", "vibrant", "muted", "monochrome", "high_contrast", "pastel"] }
+        },
+        "brand_palette_match": { "type": "string", "enum": ["full", "partial", "none", "unknown"] }
+      }
+    },
+
+    "imagery": {
+      "type": "object",
+      "description": "Облегчённый блок: детальная разметка людей (демография/эмоция/eye contact) сюда сознательно не включена — для инфографик и icon-driven креативов она не заполняется и не используется на этапе генерации. Если продукт начнёт тестировать hero-фото с людьми в кадре, эти поля можно вернуть.",
+      "required": ["subject_type", "human_figures_present", "image_style"],
+      "additionalProperties": false,
+      "properties": {
+        "subject_type": { "type": "string", "enum": ["diagram_infographic", "icon_grid", "dashboard_mockup", "flat_lay_photo", "photo_scene", "product_render", "icon_only", "text_only", "mixed_composite"] },
+        "human_figures_present": { "type": "boolean", "description": "Есть ли в кадре фотография/иллюстрация человека (лицо, фигура). Для инфографик Nexera — как правило false." },
+        "human_figure_context": { "type": ["string", "null"], "description": "Заполнять только если human_figures_present=true: 1 короткая фраза (кто, роль в кадре). Не разворачивать в подробную демографию." },
+        "image_style": { "type": "string", "enum": ["photo_realistic", "illustration_flat", "3d_render", "icon_line_art", "hand_drawn", "screenshot_ui", "mixed_media"] },
+        "background_scene_description": { "type": ["string", "null"], "description": "Свободное описание фото-сцены/окружения. Заполнять только для photo_scene/flat_lay_photo, для остальных архетипов — null." }
+      }
+    },
+
+    "branding": {
+      "type": "object",
+      "required": ["logo_present", "brand_name_in_text"],
+      "additionalProperties": false,
+      "properties": {
+        "logo_present": { "type": "boolean" },
+        "logo_position": { "type": ["string", "null"] },
+        "logo_size_relative": { "type": ["string", "null"], "enum": ["small", "medium", "large", null] },
+        "brand_name_in_text": { "type": "boolean" }
+      }
+    },
+
+    "graphic_elements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "icons": { "type": "array", "items": { "type": "string" }, "description": "назначение иконки, не файл: например 'галочка-чекмарк', 'звезда-рейтинг'" },
+        "badges_stickers": { "type": "array", "items": { "type": "string" }, "examples": [["'-50% плашка в углу'", "'NEW бейдж'"]] },
+        "arrows_pointers": { "type": "boolean" },
+        "dividers_frames": { "type": "array", "items": { "type": "string" } },
+        "decorative_shapes": { "type": "array", "items": { "type": "string" } },
+        "data_viz_elements": { "type": "array", "items": { "type": "string" }, "description": "графики, диаграммы, before/after сравнения" },
+        "ui_mockups": { "type": "array", "items": { "type": "string" }, "description": "встроенные скриншоты приложения/сайта" },
+        "trust_badges": {
+          "type": "array",
+          "description": "Символы доверия/авторитетности, визуально отделённые от текста оффера.",
+          "items": { "type": "string", "enum": ["certificate_icon", "graduation_cap", "ribbon_seal", "checkmark_badge", "star_rating", "none"] }
+        },
+        "third_party_brand_logos": {
+          "type": "object",
+          "description": "Логотипы сторонних инструментов/брендов, показанные в креативе (например ChatGPT, Claude, Gemini, Canva). Отдельно от icons, т.к. это узнаваемые чужие товарные знаки — часто требует disclaimer_legal и может влиять на perfomance/юридические риски.",
+          "additionalProperties": false,
+          "properties": {
+            "present": { "type": "boolean" },
+            "brands": { "type": "array", "items": { "type": "string" } },
+            "count": { "type": ["integer", "null"] }
+          }
+        },
+        "photo_prop_objects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Физические предметы-реквизит в кадре (для flat-lay/фото-сцен): ноутбук, блокнот, чашка кофе, линейка, ключ, компас, растение и т.п. Не путать с icons (иконки — плоская графика, props — сфотографированные объекты)."
+        },
+        "connector_style": {
+          "type": "string",
+          "description": "Как визуально связаны шаги/пункты между собой, если это roadmap/список.",
+          "enum": ["dashed_line", "solid_line", "arrow_chain", "staircase_steps", "winding_path_stones", "none"]
+        },
+        "step_number_style": {
+          "type": "string",
+          "description": "Как оформлена нумерация шагов.",
+          "enum": ["digit_badge_circle", "digit_badge_square", "day_label_text", "pin_marker", "none"]
+        }
+      }
+    },
+
+    "informational_structure": {
+      "type": "object",
+      "description": "Специфично для listicle/roadmap-креативов: как организован перечень шагов/модулей/дней. Для одиночного hero-фото без списка — structure_type='none', остальное null.",
+      "required": ["structure_type"],
+      "additionalProperties": false,
+      "properties": {
+        "structure_type": { "type": "string", "enum": ["numbered_step_grid", "staircase_progression", "path_progression", "icon_tool_list", "weekly_checklist_grid", "flowchart_diagram", "comparison_table", "none"] },
+        "item_count": { "type": ["integer", "null"], "description": "Сколько шагов/модулей/уроков/дней показано (например 10, 28, 14)." },
+        "item_grouping": { "type": ["string", "null"], "description": "например: 'сгруппировано по 4 неделям', 'по дням 1-28', 'без группировки'" }
+      }
+    },
+
+    "psychological_hooks": {
+      "type": "object",
+      "required": ["attention_hook", "persuasion_techniques", "emotional_tone"],
+      "additionalProperties": false,
+      "properties": {
+        "attention_hook": { "type": "string", "description": "что цепляет взгляд в первые 1-2 секунды" },
+        "persuasion_techniques": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["social_proof", "scarcity", "urgency", "authority", "before_after", "testimonial", "statistics", "question_hook", "curiosity_gap", "fear_appeal", "humor", "relatability", "none"] }
+        },
+        "emotional_tone": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["trust", "excitement", "fear", "aspiration", "belonging", "urgency", "calm", "humor"] }
+        }
+      }
+    },
+
+    "marketer_note_raw": {
+      "type": ["string", "null"],
+      "description": "Сырой текст комментария маркетолога о том, что именно сработало/не сработало в этом креативе — из сайдкар .txt файла рядом с картинкой (тот же basename). Заполняется скриптом из файла, не LLM. null, если файла нет."
+    },
+
+    "marketer_element_feedback": {
+      "type": "array",
+      "description": "Разбор marketer_note_raw по конкретным элементам креатива — LLM должна сопоставить свободный комментарий с конкретными частями своего же разбора (заголовок, CTA, структура, конкретный graphic_element и т.д.). Пустой массив, если marketer_note_raw = null.",
+      "items": {
+        "type": "object",
+        "required": ["element_ref", "verdict", "reasoning"],
+        "additionalProperties": false,
+        "properties": {
+          "element_ref": { "type": "string", "description": "На какой конкретно элемент указывает комментарий, например 'main_headline', 'cta', 'informational_structure.structure_type', 'graphic_elements.trust_badges', или свободное описание, если элемент не покрыт схемой." },
+          "verdict": { "type": "string", "enum": ["worked_well", "worked_poorly", "neutral_or_unclear"] },
+          "reasoning": { "type": "string", "description": "Пересказ сути комментария маркетолога применительно к этому элементу." }
+        }
+      }
+    },
+
+    "summary": {
+      "type": "object",
+      "required": ["holistic_description"],
+      "additionalProperties": false,
+      "properties": {
+        "holistic_description": { "type": "string", "description": "1 абзац свободного описания всего креатива целиком — для смыслового поиска/сравнения между записями." },
+        "distinguishing_features": { "type": "array", "items": { "type": "string" }, "description": "чем этот креатив отличается от типового в этой категории" }
+      }
+    },
+
+    "source_meta": {
+      "type": "object",
+      "description": "Служебные поля, проставляются системой при загрузке автоматически (не ручной ввод, не LLM).",
+      "required": ["image_filename", "date_added"],
+      "additionalProperties": false,
+      "properties": {
+        "image_filename": { "type": "string" },
+        "date_added": { "type": "string", "format": "date" },
+        "added_by": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

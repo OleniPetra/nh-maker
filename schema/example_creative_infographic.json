@@ -1,0 +1,130 @@
+{
+  "creative_id": "cr_0002",
+  "branch": "certif",
+  "creative_archetype": "multi_step_infographic_grid",
+  "performance": {
+    "score": 2
+  },
+  "format": {
+    "aspect_ratio": "9:16",
+    "resolution": null,
+    "creative_type": "single_image"
+  },
+  "composition": {
+    "layout_type": "numbered_card_grid",
+    "visual_hierarchy": ["логотип и заголовок 'AI CERTIFICATE FOR TEACHERS' сверху", "плашка 'IN 28 DAYS'", "сетка из 10 пронумерованных карточек-шагов", "CTA-кнопка внизу"],
+    "focal_point": "крупный заголовок вверху",
+    "whitespace_level": "low",
+    "framing_border": {
+      "present": true,
+      "style": "у каждой из 10 карточек своя цветная рамка-контур"
+    },
+    "symmetry": "symmetric"
+  },
+  "text_content": {
+    "text_blocks": [
+      { "text": "AI CERTIFICATE FOR TEACHERS", "role": "main_headline", "position": "top_center", "size_relative": "dominant", "style_notes": "жирный display-шрифт с ретро-текстурой, две строки" },
+      { "text": "IN 28 DAYS", "role": "badge_ribbon_text", "position": "под заголовком, на синей ленте-плашке", "size_relative": "medium", "style_notes": "белый текст на изогнутой синей ленте" },
+      { "text": "01 THE AI BASELINE (DAYS 1-3) — Essential Fundamentals: Discover the powerful foundation of AI in education.", "role": "step_label", "position": "card_1_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "02 MASTERING PROMPTS (DAYS 4-6) — Effective Inputs: Learn different prompt styles.", "role": "step_label", "position": "card_2_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "03 STRUCTURING YOUR AI FUTURE (DAYS 7-10) — Organize for Clarity: Set up a single parent 'AI_TEACHING' folder.", "role": "step_label", "position": "card_3_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "04 THE GUIDING PRINCIPLES (DAYS 11-13) — Your Educational Ethics: TEACHER_ROLE.md, AI_CONSTRAINTS.md", "role": "step_label", "position": "card_4_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "05 PROFESSIONAL AI INTEGRATION (DAYS 14-17) — Adopting a structured workflow", "role": "step_label", "position": "card_5_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "06 PROMPT LIBRARY & FEEDBACK (DAYS 18-20) — Build and refine prompts", "role": "step_label", "position": "card_6_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "07 CONNECTING TOOLS (DAYS 21-24) — Building a Digital Classroom", "role": "step_label", "position": "card_7_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "08 EDTECH PLATFORMS (DAYS 25-27) — Platform Integrations", "role": "step_label", "position": "card_8_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "09 CERTIFICATE FINALIZATION (DAY 28) — Skills Mastery", "role": "step_label", "position": "card_9_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "10 CLASSROOM APPLICATION & BEYOND (DAY 28) — Teaching for Tomorrow", "role": "step_label", "position": "card_10_of_10", "size_relative": "small", "style_notes": null },
+      { "text": "LEARN. APPLY. TRANSFORM. EMPOWER YOUR TEACHING WITH AI.", "role": "subheadline_tagline", "position": "bottom, над CTA-кнопкой", "size_relative": "medium", "style_notes": "жирный uppercase на жёлтой плашке" },
+      { "text": "START YOUR 28-DAY JOURNEY!", "role": "cta_button_text", "position": "bottom_center", "size_relative": "medium", "style_notes": "белый текст на синей кнопке" },
+      { "text": "nexera", "role": "brand_wordmark", "position": "top_center, над заголовком", "size_relative": "tiny", "style_notes": null },
+      { "text": "Names and logos of AI providers and tools are third-party trademarks. No affiliation or endorsement is implied.", "role": "disclaimer_legal", "position": "под подзаголовком 'IN 28 DAYS', мелким серым шрифтом", "size_relative": "tiny", "style_notes": null }
+    ],
+    "cta": {
+      "text": "START YOUR 28-DAY JOURNEY!",
+      "type": "button",
+      "position": "bottom_center",
+      "color": "#1E3A8A",
+      "shape": "rounded_rect"
+    },
+    "offer_details": null,
+    "price_display": { "present": false, "format": null },
+    "disclaimer_legal_present": true,
+    "text_density": "heavy",
+    "copy_tone": ["informative", "friendly"],
+    "language": "en"
+  },
+  "typography": {
+    "primary_typeface_style": "display",
+    "font_weight": "black",
+    "text_case": "uppercase",
+    "hierarchy_notes": "заголовок — плотный display-шрифт с ретро-текстурой; заголовки карточек — жирный sans_serif; тело карточек — regular sans_serif, заметно мельче"
+  },
+  "color": {
+    "dominant_colors": [
+      { "hex": "#F5EEDC", "name": "кремовый фон" },
+      { "hex": "#1E3A8A", "name": "синий" },
+      { "hex": "#E8B93E", "name": "жёлтый" }
+    ],
+    "accent_colors": [
+      { "hex": "#E14434", "name": "красный" },
+      { "hex": "#2F9E44", "name": "зелёный" }
+    ],
+    "background_type": "pattern",
+    "background_texture": ["organic_blob_shapes", "halftone_dots"],
+    "color_mood": ["vibrant", "high_contrast"],
+    "brand_palette_match": "unknown"
+  },
+  "imagery": {
+    "subject_type": "icon_grid",
+    "human_figures_present": false,
+    "human_figure_context": null,
+    "image_style": "illustration_flat",
+    "background_scene_description": null
+  },
+  "branding": {
+    "logo_present": true,
+    "logo_position": "top_center",
+    "logo_size_relative": "small",
+    "brand_name_in_text": true
+  },
+  "graphic_elements": {
+    "icons": ["куб (шаг 1)", "иконка чата/шестерёнки (шаг 2)", "папка (шаг 3)", "документы с указующей рукой (шаг 4)", "чек-лист (шаг 5)", "книжная полка (шаг 6)", "иконки Slack/Teams/календаря (шаг 7)", "иконки платформ Moodle/Google Classroom/Notion (шаг 8)"],
+    "badges_stickers": [],
+    "arrows_pointers": true,
+    "dividers_frames": ["пунктирные линии-коннекторы между блоками шагов"],
+    "decorative_shapes": ["органические blob-формы по углам (синяя, жёлтая, красная, зелёная)", "смайлик-солнце"],
+    "data_viz_elements": [],
+    "ui_mockups": [],
+    "trust_badges": ["certificate_icon"],
+    "third_party_brand_logos": { "present": false, "brands": [], "count": null },
+    "photo_prop_objects": [],
+    "connector_style": "dashed_line",
+    "step_number_style": "digit_badge_circle"
+  },
+  "informational_structure": {
+    "structure_type": "numbered_step_grid",
+    "item_count": 10,
+    "item_grouping": "10 карточек по 2 в ряд, дни сгруппированы неравными диапазонами (1-3, 4-6, 7-10, 11-13...28)"
+  },
+  "psychological_hooks": {
+    "attention_hook": "конкретный срок '28 дней' в заголовке + обещание сертификата",
+    "persuasion_techniques": ["authority", "statistics"],
+    "emotional_tone": ["trust", "aspiration"]
+  },
+  "marketer_note_raw": "Заголовок с конкретным сроком и профессией — топ, это то что цепляет. А вот список из 10 карточек — половину дочитывают, длинновато. Сертификат внизу не то чтобы решает.",
+  "marketer_element_feedback": [
+    { "element_ref": "main_headline", "verdict": "worked_well", "reasoning": "Конкретный срок (28 дней) и явное указание профессии в заголовке — по словам маркетолога, главный цепляющий элемент." },
+    { "element_ref": "informational_structure.structure_type", "verdict": "worked_poorly", "reasoning": "Маркетолог отмечает, что список из 10 карточек длинноват — до конца дочитывает не вся аудитория." },
+    { "element_ref": "graphic_elements.trust_badges", "verdict": "neutral_or_unclear", "reasoning": "Маркетолог считает, что плашка сертификата внизу не является решающим фактором конверсии." }
+  ],
+  "summary": {
+    "holistic_description": "Плотная вертикальная инфографика-роадмап: 10 пронумерованных карточек-этапов от основ AI до применения в классе, каждая с иконкой и коротким описанием, обёрнутые в яркую бумажно-текстурную эстетику с органическими формами по углам. Расчёт на восприятие как исчерпывающей структурированной программы, а не на эмоциональный крючок одного изображения.",
+    "distinguishing_features": ["очень высокая текстовая плотность (10 заголовков + 10 описаний) для формата stories/feed", "явная best-practice структура файлов (TEACHER_ROLE.md/AI_CONSTRAINTS.md) как элемент экспертности", "дисклеймер про товарные знаки — единственный явный юридический маркер на креативе"]
+  },
+  "source_meta": {
+    "image_filename": "nexera_teachers_28day_v1.png",
+    "date_added": "2026-07-23",
+    "added_by": null
+  }
+}
