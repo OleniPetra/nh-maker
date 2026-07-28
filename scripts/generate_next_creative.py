@@ -64,8 +64,13 @@ MODES = {
 # is just "a vertical creative". Kept in English: these models are most reliably
 # steered in English regardless of the target audience's language. The Nexera-logo/
 # disclaimer rule lives once in the system prompt (item 4) — not repeated here.
+QUOTE_RULE = (
+    "Any literal on-image text goes in single quotes ' — never a double quote \", since the "
+    "whole prompt is itself a JSON string value and an unescaped \" breaks the JSON"
+)
+
 MODE_RULES = {
-    "gpt_image_2": """
+    "gpt_image_2": f"""
 ## How to write image_prompt_gpt_image_2 (GPT Image 2 rules)
 - Write in vivid, natural descriptive prose — not a technical spec sheet.
   Order of thought: background/scene -> main subject -> key details -> what stays
@@ -74,12 +79,12 @@ MODE_RULES = {
   sections proportionally ("in the top fifth of the frame", "centered, taking up
   most of the height") — never pixel values or aspect ratios (already set via the
   generation parameters).
-- Any literal on-image text goes in quotes, with the font/color/placement
-  described right next to it in plain language.
+- {QUOTE_RULE}; describe the font/color/placement right next to it in plain
+  language.
 - Don't overload the prompt with pseudo-camera jargon (lens, film stock) — those
   are for mood/composition, not for pixel-level precision.
 """,
-    "nano_banana_2": """
+    "nano_banana_2": f"""
 ## How to write image_prompt_nano_banana_2 (Nano Banana 2 / Gemini rules)
 - Connected narrative prose, NOT a comma-separated keyword list.
 - Open with a strong verb naming the main action/operation.
@@ -87,19 +92,17 @@ MODE_RULES = {
   absent.
 - Use cinematic/photographic language (angle, lighting, materials) inside full
   sentences.
-- Describe the frame format in words ("a tall vertical frame, like a phone
-  screen"), and section proportions in words too ("the upper part of the
-  frame", "the bottom fifth") — no pixel sizes or aspect ratios (already set via
-  the generation parameters).
-- Literal text goes in quotes, with the font/effect described in the same
-  sentence.
+- Describe the frame as a vertical creative, and section proportions in words
+  too ("the upper part of the frame", "the bottom fifth") — no pixel sizes or
+  aspect ratios (already set via the generation parameters).
+- {QUOTE_RULE}; describe the font/effect in the same sentence.
 """,
-    "universal": """
+    "universal": f"""
 ## How to write universal_prompt (model-agnostic)
 - A shorter, plain descriptive prompt not tuned to any single model's quirks —
   a solid general-purpose starting point.
 - Natural prose, proportions in words, no pixel sizes or aspect ratios.
-- Literal text in quotes with typography noted alongside.
+- {QUOTE_RULE}; note typography alongside.
 """,
 }
 
@@ -306,15 +309,26 @@ def call_synthesis_model(model: str, api_key: str, branch: str, evidence_json: s
         raw = resp.json()["choices"][0]["message"]["content"]
         try:
             candidate = json.loads(raw)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            last_error = f"JSON parse error: {e}"
+            candidate = None
             import re
             match = re.search(r"\{.*\}", raw, re.DOTALL)
-            candidate = json.loads(match.group(0)) if match else None
+            if match:
+                try:
+                    candidate = json.loads(match.group(0))
+                except json.JSONDecodeError as e2:
+                    last_error = f"JSON parse error: {e2}"
+                    candidate = None
 
         if candidate is None:
-            last_error = "could not parse JSON from the model's response"
             messages.append({"role": "assistant", "content": raw})
-            messages.append({"role": "user", "content": "That is not valid JSON. Return only one correct JSON object."})
+            messages.append({"role": "user", "content": (
+                f"That is not valid JSON ({last_error}). This is usually an unescaped double-quote "
+                "character inside a string value (e.g. an on-image text quote written as \" instead "
+                "of '). Return the full corrected JSON object — use single quotes ' for any on-image "
+                "text quoted within string values, never a literal unescaped double-quote."
+            )})
             continue
 
         errors = sorted(validator.iter_errors(candidate), key=lambda e: e.path)
