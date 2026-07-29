@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Competitors Static</title>
+<link rel="icon" type="image/svg+xml" href="/static-shared/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Единая палитра Static Creo (см. audiopng/static/index.html, scripts/review_ui.html) */
+  --bg-page: #EAE3D5;
+  --bg-surface: #ffffff;
+  --bg-subtle: #F1EADC;
+  --border-color: #DDD5C4;
+  --border-hover: #C9BFA9;
+  --text-primary: #221E17;
+  --text-secondary: #5c5548;
+  --text-muted: #8A8275;
+  --accent-primary: #221E17;
+  --accent-hover: #3a352b;
+  --accent-blue: #2563eb;
+  --accent-green: #16a34a;
+  --accent-green-bg: #f0fdf4;
+  --accent-green-border: #bbf7d0;
+  --accent-red: #E8604C;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+.header {
+  height: 56px;
+  padding: 0 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo {
+  width: 28px; height: 28px; background: var(--text-primary); color: #fff;
+  border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.85rem;
+}
+.brand-title { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-primary); font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s ease; box-shadow: var(--shadow-sm); white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: var(--border-hover); background: var(--bg-subtle); }
+.btn.primary { background: var(--accent-primary); color: #ffffff; border-color: var(--accent-primary); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+.progress-wrap { height: 4px; background: var(--bg-subtle); overflow: hidden; display: none; }
+.progress-bar { height: 100%; background: var(--accent-blue); width: 0%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.progress-bar.done { background: var(--accent-green); }
+.progress-bar.error { background: var(--accent-red); }
+
+.status-bar {
+  font-size: 0.75rem; font-weight: 500; color: var(--text-secondary);
+  padding: 4px 10px; border-radius: var(--radius-sm); background: var(--bg-subtle);
+}
+.status-bar.processing { color: #d97706; background: #fef3c7; }
+
+.app { display: flex; flex: 1; min-height: 0; }
+.app-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.container {
+  display: grid;
+  grid-template-columns: 1.6fr 1.6fr 1.1fr 1.7fr;
+  flex: 1;
+  height: calc(100vh - 56px);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.column {
+  display: flex; flex-direction: column; background: var(--bg-surface);
+  border-right: 1px solid var(--border-color); overflow-y: auto; min-width: 220px;
+}
+.column:last-child { border-right: none; background: var(--bg-page); }
+
+.col-header {
+  padding: 12px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);
+  background: #f8fafc; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 5;
+}
+.col-step {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 4px; border-radius: 999px; background: var(--text-primary); color: #fff;
+  font-size: 0.6rem; font-weight: 700; margin-right: 6px;
+}
+.col-sub { padding: 4px 14px 10px; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+
+.dropzone {
+  margin: 12px; padding: 18px 12px; border: 2px dashed var(--border-color); border-radius: var(--radius-md);
+  text-align: center; color: var(--text-muted); font-size: 0.78rem; transition: all 0.2s ease;
+  cursor: pointer; background: #fafafa; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px;
+}
+.dropzone:hover, .dropzone.dragover { border-color: var(--accent-blue); background: #f0f7ff; color: var(--accent-blue); }
+.dropzone input[type=file] { display: none; }
+.dropzone-icon { width: 22px; height: 22px; stroke: currentColor; opacity: 0.7; }
+
+.our-creative-preview {
+  margin: 0 12px 12px; border-radius: var(--radius-md); overflow: hidden;
+  border: 1px solid var(--border-color); position: relative; background: #09090b;
+  aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center;
+}
+.our-creative-preview img { width: 100%; height: 100%; object-fit: contain; }
+.our-creative-preview .spinner-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.35);
+}
+.sc-spinner {
+  width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.35); border-top-color: #fff;
+  border-radius: 50%; animation: sc-spin 0.8s linear infinite;
+}
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+
+.extracted-text-wrap { margin: 0 12px 12px; }
+.extracted-text-wrap label {
+  display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.extracted-text-wrap textarea {
+  width: 100%; min-height: 110px; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
+  background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  padding: 8px; resize: vertical; outline: none;
+}
+.extracted-text-wrap textarea:focus { border-color: var(--accent-blue); }
+.extracted-text-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+
+.ref-grid { flex: 1; padding: 0 12px 12px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ref-item {
+  position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);
+  aspect-ratio: 3 / 4; background: #09090b; box-shadow: var(--shadow-sm);
+}
+.ref-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ref-item .del {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; font-size: 0.7rem; display: flex;
+  align-items: center; justify-content: center; transition: all 0.15s ease;
+}
+.ref-item .del:hover { background: var(--accent-red); }
+.ref-none { padding: 20px 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
+
+.model-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.model-opt {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md);
+  border: 1px solid var(--border-color); background: var(--bg-surface); cursor: pointer; transition: all 0.15s ease;
+}
+.model-opt:hover { border-color: var(--border-hover); }
+.model-opt.active { border-color: var(--accent-blue); background: #f0f7ff; }
+.model-opt input { margin-top: 2px; accent-color: var(--accent-blue); }
+.model-opt .model-name { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); }
+.model-opt .model-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+
+.preview-area { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; padding: 14px; gap: 12px; }
+.preview-video-wrap {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #09090b;
+  border-radius: var(--radius-lg); border: 1px solid #27272a; overflow: hidden; box-shadow: var(--shadow-md);
+  max-height: 380px; aspect-ratio: 9 / 16; margin: 0 auto; width: 100%; max-width: 210px; position: relative;
+}
+.preview-video-wrap img#imagePreview { width: 100%; height: 100%; object-fit: contain; display: none; }
+.preview-video-wrap .placeholder {
+  color: #71717a; text-align: center; padding: 16px; display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+}
+.preview-video-wrap .placeholder p { font-size: 0.75rem; line-height: 1.4; }
+.file-list {
+  flex: 1; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); padding: 8px; box-shadow: var(--shadow-sm);
+}
+.file-item {
+  font-size: 0.75rem; font-weight: 500; padding: 8px 10px; margin-bottom: 4px; border-radius: var(--radius-sm);
+  cursor: pointer; background: var(--bg-subtle); color: var(--text-primary); transition: all 0.15s ease;
+  display: flex; align-items: center; gap: 8px;
+}
+.file-item:hover { background: #e2e8f0; }
+.file-item.active { background: #dbeafe; color: var(--accent-blue); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-logo">CS</div>
+    <span class="brand-title">Competitors Static</span>
+  </div>
+  <div class="header-actions">
+    <span class="status-bar" id="runProgress" style="display:none"></span>
+    <button class="btn primary" id="btnRun" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      RUN
+    </button>
+    <button class="btn" id="btnDownload" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download Pack
+    </button>
+  </div>
+</div>
+
+<div class="progress-wrap" id="globalProgressWrap">
+  <div class="progress-bar" id="globalProgressBar"></div>
+</div>
+
+<div class="app">
+<div id="sc-sidebar-root"></div>
+<script src="/static-shared/sidebar.js"></script>
+<div class="app-content">
+<div class="container">
+
+  <!-- COL 1: Наш креатив -->
+  <div class="column">
+    <div class="col-header"><div><span class="col-step">1</span>Наш креатив</div></div>
+    <div class="col-sub">Загрузи картинку с текстом — vision-модель вытащит только текст, остальное (стиль, картинка) не используется.</div>
+    <div class="dropzone" id="ourDropzone">
+      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span>Drop image here<br><span style="color:var(--text-muted);font-size:0.7rem">PNG, JPG, WebP</span></span>
+      <input type="file" id="ourInput" accept="image/*">
+    </div>
+    <div class="our-creative-preview" id="ourPreview" style="display:none">
+      <img id="ourPreviewImg" alt="">
+      <div class="spinner-overlay" id="ourSpinner" style="display:none"><div class="sc-spinner"></div></div>
+    </div>
+    <div class="extracted-text-wrap" id="extractedTextWrap" style="display:none">
+      <label>Извлечённый текст (можно поправить)</label>
+      <textarea id="extractedText" placeholder="Текст появится здесь после извлечения…"></textarea>
+      <div class="extracted-text-hint" id="extractStatus"></div>
+    </div>
+  </div>
+
+  <!-- COL 2: Референсы от конкурентов -->
+  <div class="column">
+    <div class="col-header">
+      <div><span class="col-step">2</span>Референсы конкурентов</div>
+      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 / 10</span>
+    </div>
+    <div class="col-sub">До 10 картинок — стиль/расположение элементов каждого референса используется отдельно. Каждый референс = отдельная генерация.</div>
+    <div class="dropzone" id="refDropzone">
+      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span>Drop reference images here<br><span style="color:var(--text-muted);font-size:0.7rem">up to 10</span></span>
+      <input type="file" id="refInput" accept="image/*" multiple>
+    </div>
+    <div class="ref-grid" id="refGrid"></div>
+  </div>
+
+  <!-- COL 3: Модель -->
+  <div class="column">
+    <div class="col-header"><div><span class="col-step">3</span>Модель</div></div>
+    <div class="model-list" id="modelList"></div>
+  </div>
+
+  <!-- COL 4: Preview & Export -->
+  <div class="column">
+    <div class="col-header"><div><span class="col-step">4</span>Preview & Export</div></div>
+    <div class="preview-area">
+      <div class="preview-video-wrap">
+        <div class="placeholder" id="placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <p>Заполни шаги 1-3 и нажми RUN<br><span style="color:var(--text-muted);font-size:0.68rem">9:16 Vertical Preview</span></p>
+        </div>
+        <img id="imagePreview" alt="">
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+</div>
+
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<script>
+function $(id) { return document.getElementById(id); }
+function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+const ourDropzone = $('ourDropzone'), ourInput = $('ourInput');
+const ourPreview = $('ourPreview'), ourPreviewImg = $('ourPreviewImg'), ourSpinner = $('ourSpinner');
+const extractedTextWrap = $('extractedTextWrap'), extractedText = $('extractedText'), extractStatus = $('extractStatus');
+const refDropzone = $('refDropzone'), refInput = $('refInput'), refGrid = $('refGrid'), refCount = $('refCount');
+const modelList = $('modelList');
+const btnRun = $('btnRun'), btnDownload = $('btnDownload');
+const runProgress = $('runProgress');
+const globalProgressWrap = $('globalProgressWrap'), globalProgressBar = $('globalProgressBar');
+const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList = $('fileList');
+
+const MAX_REFS = 10;
+let ourCreativeFile = null;
+let references = []; // { id, file, blobUrl, name }
+let selectedModel = null;
+let outputFiles = []; // { name, blob, blobUrl, type: 'image' }
+
+function setupDrop(zone, input, onFiles) {
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files.length) { onFiles(input.files); input.value = ''; } });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+  });
+}
+
+// ── Шаг 1: наш креатив (upload -> preview -> auto vision-extraction) ──
+async function setOurCreative(file) {
+  ourCreativeFile = file;
+  ourPreview.style.display = 'flex';
+  ourPreviewImg.src = URL.createObjectURL(file);
+  extractedTextWrap.style.display = 'block';
+  extractedText.value = '';
+  ourSpinner.style.display = 'flex';
+  extractStatus.textContent = 'Извлекаю текст…';
+  extractStatus.style.color = 'var(--text-muted)';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('api/extract-text', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Extraction failed');
+    const data = await res.json();
+    extractedText.value = data.text || '';
+    extractStatus.textContent = data.text ? 'Текст извлечён — можешь поправить вручную.' : 'Текст не найден — впиши вручную.';
+  } catch (e) {
+    extractStatus.textContent = 'Ошибка извлечения: ' + e.message + ' — впиши текст вручную.';
+    extractStatus.style.color = '#ef4444';
+  } finally {
+    ourSpinner.style.display = 'none';
+    updateButtons();
+  }
+}
+setupDrop(ourDropzone, ourInput, files => setOurCreative(files[0]));
+
+// ── Шаг 2: референсы конкурентов (до 10) ──
+function renderRefGrid() {
+  refCount.textContent = `${references.length} / ${MAX_REFS}`;
+  if (!references.length) {
+    refGrid.innerHTML = '<div class="ref-none" style="grid-column:1/-1">Пока нет референсов.</div>';
+  } else {
+    refGrid.innerHTML = references.map(r => `
+      <div class="ref-item" data-id="${r.id}">
+        <img src="${r.blobUrl}" loading="lazy">
+        <button class="del" data-id="${r.id}">✕</button>
+      </div>
+    `).join('');
+    refGrid.querySelectorAll('.del').forEach(btn => {
+      btn.addEventListener('click', () => removeReference(btn.dataset.id));
+    });
+  }
+  updateButtons();
+}
+function addReferences(files) {
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  for (const f of imgFiles) {
+    if (references.length >= MAX_REFS) break;
+    references.push({ id: uid(), file: f, blobUrl: URL.createObjectURL(f), name: f.name });
+  }
+  renderRefGrid();
+}
+function removeReference(id) {
+  const idx = references.findIndex(r => r.id === id);
+  if (idx >= 0) { URL.revokeObjectURL(references[idx].blobUrl); references.splice(idx, 1); }
+  renderRefGrid();
+}
+setupDrop(refDropzone, refInput, addReferences);
+renderRefGrid();
+
+// ── Шаг 3: модель ──
+async function loadModels() {
+  const res = await fetch('api/generation-models');
+  const models = await res.json();
+  const DESCR = {
+    'nano-banana-2': 'Быстро, хорошо держит стиль и текст.',
+    'nano-banana-pro': 'Более точная передача деталей референса, дороже/медленнее.',
+    'gpt-image-2': 'Сильная фотореалистичность, медленнее остальных.',
+  };
+  modelList.innerHTML = models.map((m, i) => `
+    <label class="model-opt${i === 0 ? ' active' : ''}" data-id="${m.id}">
+      <input type="radio" name="gen-model" value="${m.id}" ${i === 0 ? 'checked' : ''}>
+      <div>
+        <div class="model-name">${esc(m.name)}</div>
+        <div class="model-desc">${esc(DESCR[m.id] || '')}</div>
+      </div>
+    </label>
+  `).join('');
+  selectedModel = models[0]?.id || null;
+  modelList.querySelectorAll('.model-opt').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedModel = el.dataset.id;
+      modelList.querySelectorAll('.model-opt').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+      el.querySelector('input').checked = true;
+    });
+  });
+}
+loadModels();
+
+// ── Кнопки ──
+function updateButtons() {
+  const hasText = extractedText.value.trim().length > 0;
+  btnRun.disabled = !hasText || references.length === 0;
+  btnDownload.disabled = outputFiles.length === 0;
+}
+extractedText.addEventListener('input', updateButtons);
+updateButtons();
+
+// ── RUN: один референс = один запрос на генерацию ──
+btnRun.addEventListener('click', async () => {
+  const text = extractedText.value.trim();
+  if (!text || !references.length) return;
+  btnRun.disabled = true;
+  btnDownload.disabled = true;
+  outputFiles = [];
+  renderOutputFiles();
+
+  const totalSteps = references.length;
+  let currentStep = 0;
+  function updateProgress(msg, stepDone) {
+    if (stepDone !== undefined) currentStep = stepDone;
+    const pct = Math.round((currentStep / totalSteps) * 100);
+    globalProgressWrap.style.display = 'block';
+    globalProgressBar.className = 'progress-bar';
+    globalProgressBar.style.width = pct + '%';
+    runProgress.style.display = 'inline';
+    runProgress.className = 'status-bar processing';
+    runProgress.textContent = msg;
+  }
+
+  let failCount = 0;
+  for (let i = 0; i < references.length; i++) {
+    const ref = references[i];
+    updateProgress(`Generating ${i + 1}/${references.length}: ${ref.name}`, i);
+    try {
+      const fd = new FormData();
+      fd.append('text', text);
+      fd.append('model', selectedModel);
+      fd.append('file', ref.file);
+      const res = await fetch('api/generate', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Generation failed');
+      const data = await res.json();
+      const imgRes = await fetch(data.url);
+      const blob = await imgRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      outputFiles.push({
+        name: `${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
+        blob, blobUrl, type: 'image',
+      });
+      renderOutputFiles();
+    } catch (e) {
+      console.error('generate failed for', ref.name, e);
+      failCount++;
+    }
+    currentStep = i + 1;
+  }
+
+  const donePct = 100;
+  globalProgressBar.style.width = donePct + '%';
+  if (failCount === 0) {
+    globalProgressBar.className = 'progress-bar done';
+    runProgress.className = 'status-bar';
+    runProgress.textContent = `Done — ${outputFiles.length} creative(s) ready`;
+  } else {
+    globalProgressBar.className = 'progress-bar error';
+    runProgress.className = 'status-bar';
+    runProgress.style.color = '#ef4444';
+    runProgress.textContent = `Done with ${failCount} error(s) — ${outputFiles.length} creative(s) ready`;
+  }
+  updateButtons();
+});
+
+// ── Output / Preview (та же логика, что и в audiopng, только всегда картинки) ──
+function renderOutputFiles() {
+  fileList.innerHTML = outputFiles.map((f, i) => `
+    <div class="file-item" data-idx="${i}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      <span>${esc(f.name)}</span>
+    </div>
+  `).join('');
+  fileList.querySelectorAll('.file-item').forEach(el => {
+    el.addEventListener('click', () => previewOutput(+el.dataset.idx));
+  });
+  if (outputFiles.length === 0) {
+    placeholder.style.display = 'flex';
+    imagePreview.style.display = 'none';
+  } else {
+    previewOutput(outputFiles.length - 1);
+  }
+}
+function previewOutput(idx) {
+  document.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
+  if (fileList.children[idx]) fileList.children[idx].classList.add('active');
+  placeholder.style.display = 'none';
+  imagePreview.style.display = 'block';
+  imagePreview.src = outputFiles[idx].blobUrl;
+}
+
+btnDownload.addEventListener('click', async () => {
+  if (!outputFiles.length) return;
+  const zip = new JSZip();
+  outputFiles.forEach(f => zip.file(f.name, f.blob));
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `competitors-static-pack-${Date.now()}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

@@ -1,11 +1,13 @@
 // Общий сайдбар Static Creo — единственный источник правды для навигации.
-// Подключается ОБОИМИ страницами (review_ui.html и audiopng/static/index.html) по
-// одному и тому же абсолютному пути /static-shared/sidebar.js. Каждая страница
-// должна иметь только <div id="sc-sidebar-root"></div> — всё остальное (разметка,
-// стили, клики, активная вкладка) собирает этот файл.
+// Подключается ВСЕМИ страницами (review_ui.html, audiopng/static/index.html,
+// competitors/static/index.html) по одному и тому же абсолютному пути
+// /static-shared/sidebar.js. Каждая страница должна иметь только
+// <div id="sc-sidebar-root"></div> — всё остальное (разметка, стили, клики,
+// активная вкладка) собирает этот файл.
 //
 // Логотип (✺) сам по себе кликабелен и открывает AudioPng — добавить новый пункт
-// SPA-навигации — правка только здесь, в массиве ITEMS.
+// SPA-навигации (или внешнее приложение со своим URL, через external) — правка
+// только здесь, в массиве ITEMS.
 (function () {
   var LOGO = {
     title: "AudioPng (генерация креативов + видео)",
@@ -28,8 +30,15 @@
       title: "History",
       icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
     },
+    {
+      id: "competitors",
+      title: "Competitors Static",
+      external: "/competitors/",
+      icon: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="17" cy="16" r="4"/><path d="M8 12v0M13 13.5l1.5 1"/></svg>',
+    },
   ];
-  var SPA_IDS = ITEMS.map(function (it) { return it.id; });
+  var SPA_IDS = ITEMS.filter(function (it) { return !it.external; }).map(function (it) { return it.id; });
+  var EXTERNAL_ITEMS = ITEMS.filter(function (it) { return it.external; });
 
   var CSS = "" +
     "#sc-sidebar-root { display: flex; }" +
@@ -56,8 +65,17 @@
     return location.pathname.indexOf("/audiopng") === 0;
   }
 
+  function onExternalItem(item) {
+    return location.pathname.indexOf(item.external) === 0;
+  }
+
+  function onAnyExternal() {
+    if (onAudiopng()) return true;
+    return EXTERNAL_ITEMS.some(function (it) { return onExternalItem(it); });
+  }
+
   function currentPageId() {
-    if (onAudiopng()) return null; // логотип, а не один из ITEMS, подсвечивается отдельно
+    if (onAnyExternal()) return null; // логотип/внешний пункт подсвечивается отдельно
     var h = location.hash.slice(1);
     return SPA_IDS.indexOf(h) !== -1 ? h : "creatives";
   }
@@ -68,9 +86,14 @@
   }
 
   function navigate(item) {
+    if (item.external) {
+      if (onExternalItem(item)) return; // уже там
+      location.href = item.external;
+      return;
+    }
     // Мы на корневом SPA (review_ui.html) — переключаем вкладку локально, без
     // перезагрузки. Если showPage почему-то не определён (например, скрипт этот
-    // файл подключила чужая страница) — просто переходим на "/#id".
+    // файл подключила чужая страница) — просто переходим на "/dashboard#id".
     if (typeof window.showPage === "function") {
       window.showPage(item.id);
     } else {
@@ -99,7 +122,8 @@
       b.innerHTML = item.icon;
       b.title = item.title;
       b.dataset.page = item.id;
-      if (item.id === active) b.classList.add("active");
+      var isActive = item.external ? onExternalItem(item) : item.id === active;
+      if (isActive) b.classList.add("active");
       b.onclick = function () { navigate(item); };
       nav.appendChild(b);
     });

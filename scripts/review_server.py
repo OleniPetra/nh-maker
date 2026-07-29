@@ -57,6 +57,12 @@ AUDIOPNG_DIR = PROJECT_ROOT / "audiopng"
 sys.path.insert(0, str(AUDIOPNG_DIR))
 import server as audiopng  # noqa: E402
 
+# competitors/api.py imports "server" itself (relying on the sys.path insert above having
+# already happened and audiopng's module being cached under that name) — must come after.
+COMPETITORS_DIR = PROJECT_ROOT / "competitors"
+sys.path.insert(0, str(COMPETITORS_DIR))
+import api as competitors  # noqa: E402
+
 IMAGES_DIR = PROJECT_ROOT / "Input" / "images"
 CSV_PATH = PROJECT_ROOT / "Input" / "creatives.csv"
 DB_PATH = PROJECT_ROOT / "db" / "creatives.db"
@@ -520,6 +526,10 @@ def api_db_briefs_clear(body: ClearBriefsBody):
 app.include_router(audiopng.router)
 app.mount("/audiopng/templates", StaticFiles(directory=str(audiopng.TEMPLATES_DIR)), name="audiopng_templates")
 app.mount("/audiopng", StaticFiles(directory=str(audiopng.STATIC), html=True), name="audiopng_static")
+
+# ---------- Competitors Static (смонтировано под /competitors) ----------
+app.include_router(competitors.router)
+app.mount("/competitors", StaticFiles(directory=str(competitors.STATIC), html=True), name="competitors_static")
 
 # Общий сайдбар (scripts/shared/sidebar.js) — единственный источник правды для
 # навигации, подключается и review_ui.html, и audiopng/static/index.html по
