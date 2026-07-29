@@ -527,27 +527,6 @@ body {
   white-space: nowrap;
 }
 
-.tpl-item .del {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: var(--bg-subtle);
-  cursor: pointer;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.tpl-item .del:hover {
-  background: var(--accent-red);
-  color: #fff;
-}
-
 .tpl-none {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -1422,32 +1401,6 @@ function groupTemplates(tpls) {
   return { groups, standalone };
 }
 
-async function deleteTemplate(id) {
-  await fetch(`api/templates/${id}`, { method: 'DELETE' });
-  for (const slot of ['logo', 'disclaimer']) {
-    const st = overlayState[slot];
-    if (st.selectedTemplateId === id) {
-      st.selectedTemplateId = null;
-      st.activeTplBlob = null;
-      st.activeTplBitmap = null;
-    }
-  }
-  await refreshTemplates();
-}
-
-async function deleteTemplateGroup(slot, base) {
-  const st = overlayState[slot];
-  const g = st.templateGroups[base];
-  if (!g) return;
-  const ids = [g.dark?.id, g.light?.id].filter(Boolean);
-  await Promise.all(ids.map(id => fetch(`api/templates/${id}`, { method: 'DELETE' })));
-  if (st.selectedTemplateId === 'auto:' + base) {
-    st.selectedTemplateId = null;
-    st.selectedAutoGroup = null;
-  }
-  await refreshTemplates();
-}
-
 async function loadAutoGroup(slot, base) {
   const st = overlayState[slot];
   const g = st.templateGroups[base] || {};
@@ -1521,7 +1474,6 @@ function renderTemplateList(slot) {
     <div class="tpl-item tpl-item-auto ${active ? 'active' : ''}" data-id="${esc(gid)}">
       <input type="radio" name="tpl-${slot}" ${active ? 'checked' : ''} style="accent-color:var(--accent-blue)">
       <span class="name">${esc(base)}<span class="tpl-auto-badge">Auto light/dark</span></span>
-      <button class="del" data-del-group="${esc(base)}" title="Delete both variants">✕</button>
     </div>`;
   }).join('');
 
@@ -1530,7 +1482,6 @@ function renderTemplateList(slot) {
       <input type="radio" name="tpl-${slot}" ${st.selectedTemplateId === t.id ? 'checked' : ''} style="accent-color:var(--accent-blue)">
       <img src="templates/${t.id}.png" onerror="this.src='templates/${t.id}.webp'" loading="lazy">
       <span class="name">${esc(t.name)}</span>
-      <button class="del" data-del="${t.id}">✕</button>
     </div>
   `).join('');
 
@@ -1538,17 +1489,7 @@ function renderTemplateList(slot) {
 
   container.innerHTML = html;
   container.querySelectorAll('.tpl-item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.classList.contains('del')) return;
-      selectTemplate(slot, el.dataset.id || null);
-    });
-  });
-  container.querySelectorAll('.del').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (btn.dataset.delGroup) deleteTemplateGroup(slot, btn.dataset.delGroup);
-      else deleteTemplate(btn.dataset.del);
-    });
+    el.addEventListener('click', () => selectTemplate(slot, el.dataset.id || null));
   });
 }
 
