@@ -1777,11 +1777,11 @@ async function getTemplateBlob(id) {
   return await res.blob();
 }
 
-// Audio mixing via Web Audio API. Video length is driven by Voice (the narration is what the
-// visuals are timed to) — Music is the background bed and must fill that ENTIRE length by
-// looping, not play once and go silent partway through. Bug fixed here: Music previously
-// played only its own natural duration once, so on the (typical) case of Voice being longer,
-// the music audibly cut out under the voice well before the video ended.
+// Audio mixing via Web Audio API. Video length is ALWAYS Voice's duration (narration is what
+// the visuals are timed to), falling back to Music's duration only when there's no Voice at
+// all. Music is the background bed: if shorter than Voice it loops to fill the gap; if LONGER
+// than Voice it gets cut off exactly at Voice's end (the OfflineAudioContext render length is
+// fixed to totalLen, so a looping source is simply truncated there — no extra logic needed).
 const AUDIO_SAMPLE_RATE = 48000; // AAC delivery spec: 48 kHz
 
 async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
@@ -1797,7 +1797,7 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
 
   const voiceLen = voiceBuf ? voiceBuf.duration : 0;
   const musicLen = musicBuf ? musicBuf.duration : 0;
-  const totalLen = Math.max(voiceLen, musicLen);
+  const totalLen = voiceBuf ? voiceLen : musicLen; // Voice drives length; Music-only falls back to Music's own length
   const sampleRate = AUDIO_SAMPLE_RATE;
 
   const offlineCtx = new OfflineAudioContext(2, Math.ceil(totalLen * sampleRate), sampleRate);
