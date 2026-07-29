@@ -1872,10 +1872,14 @@ async function composeOverlayCanvas(imgFile, overlays) {
 }
 
 // Delivery spec target (matches a "Match Source — High bitrate" H.264 export preset):
-// High Profile, Level 4.1/4.2, 25fps, VBR ~5 Mbps @1080p, AAC 48kHz stereo ~256kbps.
+// High Profile, Level 4.1/4.2, 25fps, VBR ~5 Mbps @1080p, AAC 48kHz stereo ~192kbps.
 const VIDEO_FRAME_RATE = 25;
 const VIDEO_BITRATE = 5_000_000;
-const AUDIO_BITRATE = 256_000;
+// 192000, NOT 256000: Windows' platform AAC encoder (Media Foundation) only accepts a fixed
+// set of bitrates — 96000/128000/160000/192000 — and configure() throws "Unsupported bitrate"
+// for anything else. macOS/Chromium's encoder accepts arbitrary values so this went unnoticed
+// there; 192000 is still within the original 192-320kbps spec and works on both platforms.
+const AUDIO_BITRATE = 192_000;
 const VIDEO_KEYFRAME_INTERVAL = VIDEO_FRAME_RATE * 2; // ~2s GOP — reasonable seek granularity
 
 // Picks the best H.264 profile/level this browser/hardware actually supports, preferring the
