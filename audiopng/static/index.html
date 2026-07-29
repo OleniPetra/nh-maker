@@ -1917,10 +1917,41 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     fastStart: 'in-memory',
   });
 
+  // Audio FIRST, video SECOND — deliberately, not just cosmetically. An encoder that's created
+  // and configure()d but then sits unused for a while (configure() is async — it queues a
+  // control-thread task and returns immediately) can fail that async configure step later,
+  // silently closing itself, with only its `error` callback firing — which does NOT surface as
+  // a catchable exception at our .encode() call site until we actually try to use it. The old
+  // order created+configured the audio encoder BEFORE the (now real, multi-hundred-frame, can
+  // take several seconds) video encode loop, then used it only after — giving a stale-config
+  // failure the whole video-loop duration to happen invisibly before "Cannot call encode on a
+  // closed codec" surfaced with no useful context. Audio encoding is fast and small, so doing
+  // it immediately after configure — before the slow video loop — closes that window.
+  let audioEncoderError = null;
+  const audioEncoder = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error: e => { audioEncoderError = e; },
+  });
+  audioEncoder.configure({
+    codec: 'mp4a.40.2',
+    numberOfChannels: audioBuf.numberOfChannels,
+    sampleRate: audioBuf.sampleRate,
+    bitrate: AUDIO_BITRATE,
+  });
+  if (audioEncoderError) throw new Error(`Audio encoder failed to configure: ${audioEncoderError.message || audioEncoderError}`);
+
+  const audioData = createAudioData(audioBuf);
+  audioEncoder.encode(audioData);
+  await audioEncoder.flush();
+  if (audioEncoderError) throw new Error(`Audio encoding failed: ${audioEncoderError.message || audioEncoderError}`);
+  audioEncoder.close();
+  audioData.close();
+
+  let videoEncoderError = null;
   const videoCodec = await pickVideoCodec(width, height);
   const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: e => { throw e; },
+    error: e => { videoEncoderError = e; },
   });
   videoEncoder.configure({
     codec: videoCodec,
@@ -1929,17 +1960,7 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     bitrateMode: 'variable', // VBR
     framerate: VIDEO_FRAME_RATE,
   });
-
-  const audioEncoder = new AudioEncoder({
-    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-    error: e => { throw e; },
-  });
-  audioEncoder.configure({
-    codec: 'mp4a.40.2',
-    numberOfChannels: audioBuf.numberOfChannels,
-    sampleRate: audioBuf.sampleRate,
-    bitrate: AUDIO_BITRATE,
-  });
+  if (videoEncoderError) throw new Error(`Video encoder failed to configure: ${videoEncoderError.message || videoEncoderError}`);
 
   // The image never changes, but we still encode real per-frame samples at VIDEO_FRAME_RATE
   // (identical content compresses to almost nothing under VBR) so the output is genuinely
@@ -1947,6 +1968,7 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
   const frameDurationUs = Math.round(1_000_000 / VIDEO_FRAME_RATE);
   const totalFrames = Math.max(1, Math.round((audioBuf.duration * 1_000_000) / frameDurationUs));
   for (let i = 0; i < totalFrames; i++) {
+    if (videoEncoderError) throw new Error(`Video encoding failed at frame ${i}/${totalFrames}: ${videoEncoderError.message || videoEncoderError}`);
     if (videoEncoder.encodeQueueSize > 30) {
       await new Promise(r => setTimeout(r, 10));
     }
@@ -1958,14 +1980,9 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
     frame.close();
   }
   await videoEncoder.flush();
+  if (videoEncoderError) throw new Error(`Video encoding failed: ${videoEncoderError.message || videoEncoderError}`);
   videoEncoder.close();
   frameBitmap.close();
-
-  const audioData = createAudioData(audioBuf);
-  audioEncoder.encode(audioData);
-  await audioEncoder.flush();
-  audioEncoder.close();
-  audioData.close();
 
   muxer.finalize();
 
