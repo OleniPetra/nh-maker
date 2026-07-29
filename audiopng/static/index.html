@@ -1000,6 +1000,7 @@ body {
 <script src="ffmpeg/index.js?v=3"></script>
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@4.1.0/build/mp4-muxer.js"></script>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<script src="/static-shared/handoff.js"></script>
 <script>
 // ── ffmpeg.wasm setup (safe-init: UI works even if CDN fails) ─
 const FFmpegW = typeof FFmpegWASM !== 'undefined' ? FFmpegWASM : null;
@@ -2155,8 +2156,28 @@ btnDownload.addEventListener('click', async () => {
   URL.revokeObjectURL(url);
 });
 
+// Подхватывает картинки, переданные из другого раздела (например, кнопкой "Отправить в NH"
+// в Competitors Static) через общий IndexedDB-"ящик" — см. scripts/shared/handoff.js. URL
+// вида /audiopng/?import=1 сигнализирует, что там что-то лежит; после разбора параметр
+// убирается из адресной строки, чтобы обновление страницы не импортировало те же файлы снова.
+async function importHandoffImages() {
+  if (new URLSearchParams(location.search).get('import') !== '1' || !window.NHHandoff) return;
+  try {
+    const items = await NHHandoff.consume();
+    if (items && items.length) {
+      const files = items.map(it => new File([it.blob], it.name, { type: it.blob.type || 'image/png' }));
+      await addImages(files);
+    }
+  } catch (e) {
+    console.error('handoff import failed', e);
+  } finally {
+    history.replaceState(null, '', location.pathname);
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────
 refreshTemplates();
+importHandoffImages();
 </script>
 </body>
 </html>

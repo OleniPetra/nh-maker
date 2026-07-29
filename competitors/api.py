@@ -159,3 +159,16 @@ async def api_generate(
         )
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
+
+@router.post("/api/outpaint-only")
+async def api_outpaint_only(file: UploadFile = File(...)):
+    """Re-run just the outpaint step on an already-generated 3:4 save-zone (the frontend re-fetches
+    savezone_url from a previous /api/generate call and posts it here) — skips the paid generation-
+    model call entirely, for when only the outpaint result needs a retry."""
+    audiopng._require_fal_key()
+    content = await file.read()
+    async with httpx.AsyncClient(timeout=280) as client:
+        final_url, method = await audiopng._run_outpaint(
+            client, content, audiopng.UPLOAD_SAVEZONE_W, audiopng.UPLOAD_SAVEZONE_H
+        )
+    return {"url": final_url, "outpaint_method": method}

@@ -117,7 +117,7 @@ body {
   padding: 0 4px; border-radius: 999px; background: var(--text-primary); color: #fff;
   font-size: 0.6rem; font-weight: 700; margin-right: 6px;
 }
-.col-sub { padding: 4px 14px 10px; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+.col-sub { padding: 4px 12px 10px; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
 
 .dropzone {
   margin: 12px; padding: 18px 12px; border: 2px dashed var(--border-color); border-radius: var(--radius-md);
@@ -130,9 +130,9 @@ body {
 .dropzone-icon { width: 22px; height: 22px; stroke: currentColor; opacity: 0.7; }
 
 .our-creative-preview {
-  margin: 0 12px 12px; border-radius: var(--radius-md); overflow: hidden;
+  margin: 0 auto 12px; border-radius: var(--radius-md); overflow: hidden;
   border: 1px solid var(--border-color); position: relative; background: #09090b;
-  aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 9 / 16; max-width: 170px; width: 100%; display: flex; align-items: center; justify-content: center;
 }
 .our-creative-preview img { width: 100%; height: 100%; object-fit: contain; }
 .our-creative-preview .spinner-overlay {
@@ -151,17 +151,17 @@ body {
   text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
 }
 .extracted-text-wrap textarea {
-  width: 100%; min-height: 110px; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
+  width: 100%; min-height: 320px; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
   background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-  padding: 8px; resize: vertical; outline: none;
+  padding: 8px; resize: vertical; outline: none; line-height: 1.5;
 }
 .extracted-text-wrap textarea:focus { border-color: var(--accent-blue); }
 .extracted-text-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
 
-.ref-grid { flex: 1; padding: 0 12px 12px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ref-grid { flex: 1; padding: 0 12px 12px; margin-top: -2px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
 .ref-item {
   position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);
-  aspect-ratio: 3 / 4; background: #09090b; box-shadow: var(--shadow-sm);
+  aspect-ratio: 9 / 16; background: #09090b; box-shadow: var(--shadow-sm);
 }
 .ref-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ref-item .del {
@@ -170,7 +170,7 @@ body {
   align-items: center; justify-content: center; transition: all 0.15s ease;
 }
 .ref-item .del:hover { background: var(--accent-red); }
-.ref-none { padding: 20px 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
+.ref-none { grid-column: 1 / -1; padding: 20px 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
 
 .model-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .model-opt {
@@ -206,6 +206,17 @@ body {
 }
 .file-item:hover { background: #e2e8f0; }
 .file-item.active { background: #dbeafe; color: var(--accent-blue); font-weight: 600; }
+.file-item.processing { color: #d97706; cursor: default; }
+.file-item-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-item-retry {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg-surface);
+  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center;
+  justify-content: center; transition: all 0.15s ease;
+}
+.file-item-retry:hover:not(:disabled) { background: var(--accent-blue); color: #fff; }
+.file-item-retry:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -290,6 +301,10 @@ body {
         </div>
         <img id="imagePreview" alt="">
       </div>
+      <button class="btn primary" id="btnSendToNH" disabled style="width:100%">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+        Отправить в NH (Upload 9:16)
+      </button>
       <div class="file-list" id="fileList"></div>
     </div>
   </div>
@@ -299,6 +314,7 @@ body {
 </div>
 
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<script src="/static-shared/handoff.js"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -309,7 +325,7 @@ const ourPreview = $('ourPreview'), ourPreviewImg = $('ourPreviewImg'), ourSpinn
 const extractedTextWrap = $('extractedTextWrap'), extractedText = $('extractedText'), extractStatus = $('extractStatus');
 const refDropzone = $('refDropzone'), refInput = $('refInput'), refGrid = $('refGrid'), refCount = $('refCount');
 const modelList = $('modelList');
-const btnRun = $('btnRun'), btnDownload = $('btnDownload');
+const btnRun = $('btnRun'), btnDownload = $('btnDownload'), btnSendToNH = $('btnSendToNH');
 const runProgress = $('runProgress');
 const globalProgressWrap = $('globalProgressWrap'), globalProgressBar = $('globalProgressBar');
 const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList = $('fileList');
@@ -429,6 +445,7 @@ function updateButtons() {
   const hasText = extractedText.value.trim().length > 0;
   btnRun.disabled = !hasText || references.length === 0;
   btnDownload.disabled = outputFiles.length === 0;
+  btnSendToNH.disabled = outputFiles.length === 0;
 }
 extractedText.addEventListener('input', updateButtons);
 updateButtons();
@@ -471,8 +488,11 @@ btnRun.addEventListener('click', async () => {
       const blob = await imgRes.blob();
       const blobUrl = URL.createObjectURL(blob);
       outputFiles.push({
+        id: uid(),
         name: `${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
         blob, blobUrl, type: 'image',
+        savezoneUrl: data.savezone_url, // pre-outpaint 3:4 — reused by "перегенерировать аутпеинт"
+        outpainting: false,
       });
       renderOutputFiles();
     } catch (e) {
@@ -500,13 +520,23 @@ btnRun.addEventListener('click', async () => {
 // ── Output / Preview (та же логика, что и в audiopng, только всегда картинки) ──
 function renderOutputFiles() {
   fileList.innerHTML = outputFiles.map((f, i) => `
-    <div class="file-item" data-idx="${i}">
+    <div class="file-item${f.outpainting ? ' processing' : ''}" data-idx="${i}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span>${esc(f.name)}</span>
+      <span class="file-item-name">${f.outpainting ? 'Перегенерирую аутпеинт…' : esc(f.name)}</span>
+      <button class="file-item-retry" data-idx="${i}" title="Перегенерировать только аутпеинт" ${f.outpainting ? 'disabled' : ''}>↻</button>
     </div>
   `).join('');
   fileList.querySelectorAll('.file-item').forEach(el => {
-    el.addEventListener('click', () => previewOutput(+el.dataset.idx));
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.file-item-retry')) return;
+      previewOutput(+el.dataset.idx);
+    });
+  });
+  fileList.querySelectorAll('.file-item-retry').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      retryOutpaint(+btn.dataset.idx);
+    });
   });
   if (outputFiles.length === 0) {
     placeholder.style.display = 'flex';
@@ -523,6 +553,35 @@ function previewOutput(idx) {
   imagePreview.src = outputFiles[idx].blobUrl;
 }
 
+// Перегенерировать ТОЛЬКО аутпеинт для одной уже готовой картинки — переиспользует
+// сохранённый pre-outpaint savezone_url, платная генерация моделью не повторяется.
+async function retryOutpaint(idx) {
+  const entry = outputFiles[idx];
+  if (!entry || !entry.savezoneUrl || entry.outpainting) return;
+  entry.outpainting = true;
+  renderOutputFiles();
+  try {
+    const savezoneRes = await fetch(entry.savezoneUrl);
+    const savezoneBlob = await savezoneRes.blob();
+    const fd = new FormData();
+    fd.append('file', new File([savezoneBlob], 'savezone.png', { type: 'image/png' }));
+    const res = await fetch('api/outpaint-only', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Outpaint retry failed');
+    const data = await res.json();
+    const imgRes = await fetch(data.url);
+    const blob = await imgRes.blob();
+    URL.revokeObjectURL(entry.blobUrl);
+    entry.blob = blob;
+    entry.blobUrl = URL.createObjectURL(blob);
+  } catch (e) {
+    console.error('retry outpaint failed', e);
+    alert('Не удалось перегенерировать аутпеинт: ' + e.message);
+  } finally {
+    entry.outpainting = false;
+    renderOutputFiles();
+  }
+}
+
 btnDownload.addEventListener('click', async () => {
   if (!outputFiles.length) return;
   const zip = new JSZip();
@@ -536,6 +595,25 @@ btnDownload.addEventListener('click', async () => {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+});
+
+// Отправляет все сгенерированные 9:16 картинки в AudioPng -> Upload 9:16, через общий
+// IndexedDB-"ящик" (scripts/shared/handoff.js) — audiopng сам их забирает на своей стороне
+// и прогоняет через тот же addImages(), что и обычная ручная загрузка.
+btnSendToNH.addEventListener('click', async () => {
+  if (!outputFiles.length || !window.NHHandoff) return;
+  btnSendToNH.disabled = true;
+  const prevLabel = btnSendToNH.innerHTML;
+  btnSendToNH.innerHTML = 'Отправляю…';
+  try {
+    await NHHandoff.stage(outputFiles.map(f => ({ name: f.name, blob: f.blob })));
+    location.href = '/audiopng/?import=1';
+  } catch (e) {
+    console.error('send to NH failed', e);
+    alert('Не удалось отправить в AudioPng: ' + e.message);
+    btnSendToNH.disabled = false;
+    btnSendToNH.innerHTML = prevLabel;
+  }
 });
 </script>
 </body>
