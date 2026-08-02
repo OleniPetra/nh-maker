@@ -619,7 +619,7 @@ body {
 
 .adjust-preview-box {
   width: 85%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 9 / 16; /* fallback — overridden inline per card to match img.targetW/targetH */
   max-height: 480px;
   background: #000;
   border-radius: var(--radius-md);
@@ -885,7 +885,8 @@ body {
     <div class="mode-toggle" id="imgModeToggle">
       <div class="mode-toggle-btn mode-toggle-ratio active" data-mode="upload916" id="uploadRatioTab">
         📁 <select id="uploadRatioSelect" title="Соотношение сторон для Upload">
-          <option value="9:16">9:16 — 1080×1920</option>
+          <option value="auto">Auto — как на входе</option>
+          <option value="9:16" selected>9:16 — 1080×1920</option>
           <option value="16:9">16:9 — 1920×1080</option>
           <option value="1:1">1:1 — 1080×1080</option>
           <option value="5:4">5:4 — 1350×1080</option>
@@ -1325,21 +1326,31 @@ async function addImages(files, retryMeta) {
 // который остаётся в addImages() выше (используется AI Gen и handoff из Competitors Static —
 // там всегда нужен ровно 1080x1920, независимо от того, что сейчас выбрано в этом дропдауне).
 async function addImagesWithRatio(files) {
-  const { w, h } = UPLOAD_RATIOS[selectedUploadRatio];
+  const isAuto = selectedUploadRatio === 'auto';
   const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
   const created = [];
   for (const f of imgFiles) {
     if (images.length >= 50) break;
     const blobUrl = URL.createObjectURL(f);
-    const entry = createPlaceholderEntry(f.name, blobUrl, f.size, `Масштабирование до ${w}×${h}…`);
-    entry.targetW = w;
-    entry.targetH = h;
+    const entry = createPlaceholderEntry(f.name, blobUrl, f.size, isAuto ? 'Определяю размер…' : `Масштабирование до ${UPLOAD_RATIOS[selectedUploadRatio].w}×${UPLOAD_RATIOS[selectedUploadRatio].h}…`);
     created.push(entry);
     try {
-      const stretched = await stretchToRatio(f, w, h);
-      finalizeEntry(entry.id, stretched, f.name);
+      if (isAuto) {
+        // Auto: без изменений — размер/соотношение результата равны исходному файлу.
+        const bitmap = await createImageBitmap(f);
+        entry.targetW = bitmap.width;
+        entry.targetH = bitmap.height;
+        bitmap.close();
+        finalizeEntry(entry.id, f, f.name);
+      } else {
+        const { w, h } = UPLOAD_RATIOS[selectedUploadRatio];
+        entry.targetW = w;
+        entry.targetH = h;
+        const stretched = await stretchToRatio(f, w, h);
+        finalizeEntry(entry.id, stretched, f.name);
+      }
     } catch (e) {
-      console.error('stretch failed', e);
+      console.error('addImagesWithRatio failed', e);
       failEntry(entry.id);
     }
   }
@@ -1689,7 +1700,7 @@ function renderOverlayAdjustList(slot) {
     <div class="adjust-card" data-idx="${idx}">
       <div class="adjust-card-header">${idx + 1}. ${esc(img.name)}${idx === 0 ? ' <span class="master-badge" title="Меняет расположение/размер сразу у всех файлов">★ master</span>' : ''}${st.selectedAutoGroup ? ` <span class="tone-badge" id="toneBadge-${slot}-${idx}">${img.overlayTone ? `[auto: ${img.overlayTone}]` : '[detecting…]'}</span>` : ''}</div>
       <div class="adjust-card-body">
-        <div class="adjust-preview-box">
+        <div class="adjust-preview-box" style="aspect-ratio:${cw} / ${ch}">
           <canvas width="${cw}" height="${ch}" class="adjust-canvas" data-idx="${idx}"></canvas>
         </div>
         <div class="adjust-sliders-wrap">
