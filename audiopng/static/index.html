@@ -279,6 +279,27 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.mode-toggle-ratio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 4px;
+}
+
+.mode-toggle-ratio select {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
 /* Dropzone */
 .dropzone {
   margin: 12px;
@@ -853,7 +874,17 @@ body {
       <div><span class="col-step">1</span>Images</div>
     </div>
     <div class="mode-toggle" id="imgModeToggle">
-      <button type="button" class="mode-toggle-btn active" data-mode="upload916">📁 Upload 9:16</button>
+      <div class="mode-toggle-btn mode-toggle-ratio active" data-mode="upload916" id="uploadRatioTab">
+        📁 <select id="uploadRatioSelect" title="Соотношение сторон для Upload">
+          <option value="9:16">9:16 — 1080×1920</option>
+          <option value="16:9">16:9 — 1920×1080</option>
+          <option value="1:1">1:1 — 1080×1080</option>
+          <option value="5:4">5:4 — 1350×1080</option>
+          <option value="4:5">4:5 — 1080×1350</option>
+          <option value="3:4">3:4 — 1080×1440</option>
+          <option value="4:3">4:3 — 1440×1080</option>
+        </select>
+      </div>
       <button type="button" class="mode-toggle-btn" data-mode="upload34">🖼️ Upload 3:4</button>
       <button type="button" class="mode-toggle-btn" data-mode="generate">✨ AI Gen</button>
     </div>
@@ -1116,6 +1147,14 @@ imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(btn => {
   });
 });
 
+// Дропдаун соотношения живёт ВНУТРИ таба — клики по нему не должны переключать вкладку
+// (обычно она и так уже активна, когда им пользуются, но лишний ре-рендер ни к чему).
+const uploadRatioSelect = $('uploadRatioSelect');
+uploadRatioSelect.addEventListener('click', e => e.stopPropagation());
+uploadRatioSelect.addEventListener('change', e => {
+  selectedUploadRatio = e.target.value;
+});
+
 // ── local state ─────────────────────────────────────────────
 let images = [];        // { id, name, file, blobUrl, logoYSlider, logoScale, discYSlider, discScale }
 let voiceFile = null;
@@ -1164,6 +1203,34 @@ function setupDrop(el, inputEl, onFiles) {
 // от исходного файла.
 const TARGET_W = 1080, TARGET_H = 1920;
 
+// 📁 Upload 9:16 tile — ratio dropdown. Смысл каждого значения: меньшее число пары = 1080px
+// по своей оси, второе число масштабируется от него по реальному соотношению (так и получены
+// точные пиксели ниже — не круглые прикидки).
+const UPLOAD_RATIOS = {
+  '9:16': { w: 1080, h: 1920 },
+  '16:9': { w: 1920, h: 1080 },
+  '1:1':  { w: 1080, h: 1080 },
+  '5:4':  { w: 1350, h: 1080 },
+  '4:5':  { w: 1080, h: 1350 },
+  '3:4':  { w: 1080, h: 1440 },
+  '4:3':  { w: 1440, h: 1080 },
+};
+let selectedUploadRatio = '9:16';
+
+// Растяжение/сжатие ПОД конкретное соотношение без обрезки (в отличие от normalizeTo1080x1920
+// ниже, которое всегда cover-fit + crop до фиксированных 1080x1920) — так просил пользователь
+// для этой конкретной вкладки: картинка деформируется точно под холст, но ничего не теряется.
+async function stretchToRatio(file, targetW, targetH) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = new OffscreenCanvas(targetW, targetH);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+  bitmap.close();
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  const base = file.name.replace(/\.[^.]+$/, '');
+  return new File([blob], `${base}-${targetW}x${targetH}.png`, { type: 'image/png' });
+}
+
 async function normalizeTo1080x1920(file) {
   const bitmap = await createImageBitmap(file);
   const canvas = new OffscreenCanvas(TARGET_W, TARGET_H);
@@ -1183,6 +1250,9 @@ async function normalizeTo1080x1920(file) {
 function createPlaceholderEntry(name, blobUrl, size, statusLabel) {
   const entry = {
     id: uid(), name, file: null, blobUrl, size: size || 0,
+    targetW: TARGET_W, targetH: TARGET_H, // RUN IMAGE ONLY renders at this size; overridden by
+    // addImagesWithRatio() for the Upload 9:16 tile's ratio dropdown. RUN (video) always ignores
+    // this and uses TARGET_W/TARGET_H — video stays a fixed vertical format regardless.
     logoYSlider: 640, logoScale: 100,   // default center (range 20-1260), default 100%
     discYSlider: 640, discScale: 100,
     status: 'processing', statusLabel: statusLabel || 'Обработка…',
@@ -1232,6 +1302,32 @@ async function addImages(files, retryMeta) {
   return created;
 }
 
+// Только для дропзоны вкладки "📁 Upload 9:16" — растягивает под ВЫБРАННОЕ в дропдауне
+// соотношение (без обрезки, см. stretchToRatio) вместо фиксированного 1080x1920 cover-fit-crop,
+// который остаётся в addImages() выше (используется AI Gen и handoff из Competitors Static —
+// там всегда нужен ровно 1080x1920, независимо от того, что сейчас выбрано в этом дропдауне).
+async function addImagesWithRatio(files) {
+  const { w, h } = UPLOAD_RATIOS[selectedUploadRatio];
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  const created = [];
+  for (const f of imgFiles) {
+    if (images.length >= 50) break;
+    const blobUrl = URL.createObjectURL(f);
+    const entry = createPlaceholderEntry(f.name, blobUrl, f.size, `Масштабирование до ${w}×${h}…`);
+    entry.targetW = w;
+    entry.targetH = h;
+    created.push(entry);
+    try {
+      const stretched = await stretchToRatio(f, w, h);
+      finalizeEntry(entry.id, stretched, f.name);
+    } catch (e) {
+      console.error('stretch failed', e);
+      failEntry(entry.id);
+    }
+  }
+  return created;
+}
+
 function removeImage(id) {
   const idx = images.findIndex(i => i.id === id);
   if (idx >= 0) {
@@ -1267,7 +1363,7 @@ function renderImages() {
   renderOverlayAdjustList('logo');
   renderOverlayAdjustList('disclaimer');
 }
-setupDrop(imgDropzone, imgInput, addImages);
+setupDrop(imgDropzone, imgInput, addImagesWithRatio);
 
 // ── Upload 3:4: ready-made save-zone creatives → auto-outpaint to 9:16 ─────
 // Карточка появляется сразу (превью 3:4, размыто + спиннер), пока идёт сетевой
@@ -1771,8 +1867,7 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
 // Draws the base image (contain-fit, black letterbox) + overlays (logo/disclaimer) onto a
 // 1080x1920 canvas. Shared by video rendering (renderOneVideo) and the audio-less image
 // export (renderOneImage) — one drawing implementation, two output paths.
-async function composeOverlayCanvas(imgFile, overlays) {
-  const width = TARGET_W, height = TARGET_H;
+async function composeOverlayCanvas(imgFile, overlays, width, height) {
   const imgBitmap = await createImageBitmap(imgFile);
 
   const overlayBitmaps = await Promise.all(overlays.map(async o => {
@@ -1846,13 +1941,13 @@ async function pickVideoCodec(width, height) {
 }
 
 async function renderOneVideo(imgFile, overlays, audioBuf) {
-  // Force 1080x1920 (9:16 vertical) — все входы (Upload 9:16, Upload 3:4 после
-  // outpaint+нормализации) уже приведены к этому холсту, так что здесь просто
-  // финальный контейнер, без даунскейла.
+  // Видео всегда 1080x1920 (9:16 вертикальный формат), независимо от того, под какое
+  // соотношение растянута исходная картинка на вкладке Upload 9:16 — contain-fit ниже
+  // просто впишет её внутрь этого холста без обрезки.
   const width = TARGET_W;
   const height = TARGET_H;
 
-  const canvas = await composeOverlayCanvas(imgFile, overlays);
+  const canvas = await composeOverlayCanvas(imgFile, overlays, width, height);
   const frameBitmap = canvas.transferToImageBitmap();
 
   const muxerTarget = new Mp4Muxer.ArrayBufferTarget();
@@ -1935,9 +2030,11 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
   return new Blob([muxerTarget.buffer], { type: 'video/mp4' });
 }
 
-// RUN IMAGE ONLY: same overlay composition, no audio/video encoding — exports a flat PNG.
-async function renderOneImage(imgFile, overlays) {
-  const canvas = await composeOverlayCanvas(imgFile, overlays);
+// RUN IMAGE ONLY: same overlay composition, no audio/video encoding — exports a flat PNG at
+// the image's OWN target size (per-image, set at upload time — see UPLOAD_RATIOS), unlike
+// renderOneVideo() which always forces 1080x1920 regardless.
+async function renderOneImage(imgFile, overlays, width, height) {
+  const canvas = await composeOverlayCanvas(imgFile, overlays, width, height);
   return await canvas.convertToBlob({ type: 'image/png' });
 }
 
@@ -2074,7 +2171,7 @@ btnRunImagesOnly.addEventListener('click', async () => {
       updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const img = images[i];
       const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
-      const pngBlob = await renderOneImage(img.file, overlays);
+      const pngBlob = await renderOneImage(img.file, overlays, img.targetW || TARGET_W, img.targetH || TARGET_H);
       const blobUrl = URL.createObjectURL(pngBlob);
       outputFiles.push({
         name: `${images[i].name.replace(/\.[^.]+$/, '')}.png`,
