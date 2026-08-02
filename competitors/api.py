@@ -128,25 +128,16 @@ GEN_PROMPT_TEMPLATE = (
     "orientation, 3:4 aspect ratio."
 )
 
-@router.post("/api/generate")
-async def api_generate(
-    text: str = Form(...),
-    model: str = Form(...),
-    file: UploadFile = File(...),
-):
-    """One call = one reference image = one generated creative. Frontend calls this once per
-    competitor reference. Pipeline: upload reference -> call the chosen edit model (text + 1
-    reference image) -> 3:4 result -> outpaint (reusing audiopng._run_outpaint) -> 9:16 result."""
-    audiopng._require_fal_key()
+async def _do_generate(text: str, model: str, ref_bytes: bytes, ref_content_type: str, ref_filename: str) -> dict:
+    """The actual (slow) work — see audiopng._start_async_job for why this runs in the background
+    instead of directly in the request handler (GPT Image 2 in particular can take 2-3 minutes,
+    well past what Cloudflare's edge lets a single proxied HTTP request run for)."""
     if model not in GENERATION_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
     cfg = GENERATION_MODELS[model]
 
-    ref_bytes = await file.read()
-    ref_content_type = file.content_type or "image/png"
-
     async with httpx.AsyncClient(timeout=280) as client:
-        ref_url = await audiopng._fal_storage_upload(client, ref_bytes, ref_content_type, file.filename or "reference.png")
+        ref_url = await audiopng._fal_storage_upload(client, ref_bytes, ref_content_type, ref_filename)
 
         prompt = GEN_PROMPT_TEMPLATE.format(text=text.strip())
         payload = {"prompt": prompt, "image_urls": [ref_url], **cfg["payload_extra"]}
@@ -166,6 +157,35 @@ async def api_generate(
         )
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
+
+@router.post("/api/generate")
+async def api_generate(
+    text: str = Form(...),
+    model: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """One call = one reference image = one generated creative. Frontend calls this once per
+    competitor reference. Pipeline: upload reference -> call the chosen edit model (text + 1
+    reference image) -> 3:4 result -> outpaint (reusing audiopng._run_outpaint) -> 9:16 result.
+    Kicks off the work in the background and returns a job_id immediately — poll
+    GET /api/job/{job_id} (same endpoint audiopng exposes, shared job store) for the result."""
+    audiopng._require_fal_key()
+    if model not in GENERATION_MODELS:
+        raise HTTPException(400, f"Unknown model: {model}")
+    ref_bytes = await file.read()
+    ref_content_type = file.content_type or "image/png"
+    ref_filename = file.filename or "reference.png"
+    job_id = audiopng._start_async_job(_do_generate(text, model, ref_bytes, ref_content_type, ref_filename))
+    return {"job_id": job_id}
+
+@router.get("/api/job/{job_id}")
+async def api_job(job_id: str):
+    """Same job store as audiopng — /api/generate above starts jobs via audiopng._start_async_job,
+    so polling reuses its lookup rather than keeping a separate one here."""
+    job = audiopng._get_job(job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    return job
 
 @router.post("/api/outpaint-only")
 async def api_outpaint_only(file: UploadFile = File(...)):

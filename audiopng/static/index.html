@@ -1843,6 +1843,23 @@ updateButtons();
 
 genPrompt.addEventListener('input', updateButtons);
 
+// Slow generation calls (GPT Image 2 in particular can take 2-3 minutes) run as a background
+// job on the backend so no single HTTP request has to stay open that long — Cloudflare's tunnel
+// edge kills a proxied request around ~100s and returns its own HTML error page, which broke
+// res.json() with "Unexpected token '<' ... is not valid JSON". Start the job, then poll.
+async function pollJob(jobId, { intervalMs = 2000 } = {}) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, intervalMs));
+    const res = await fetch(`api/job/${jobId}`);
+    if (!res.ok) throw new Error('Job lookup failed');
+    const job = await res.json();
+    if (job.done) {
+      if (job.error) throw new Error(job.error);
+      return job.result;
+    }
+  }
+}
+
 // ── AI Generate: save-zone creative → auto-outpaint to 9:16 ─
 async function generateCreative() {
   const prompt = genPrompt.value.trim();
@@ -1855,10 +1872,11 @@ async function generateCreative() {
     const fd = new FormData();
     fd.append('prompt', prompt);
     fd.append('model', genModel.value);
-    const res = await fetch('api/generate-creative', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Generation failed');
-    genStatusMsg.textContent = 'Outpainting background to 9:16…';
-    const data = await res.json();
+    const startRes = await fetch('api/generate-creative', { method: 'POST', body: fd });
+    if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
+    const { job_id } = await startRes.json();
+    genStatusMsg.textContent = 'Generating creative and outpainting to 9:16…';
+    const data = await pollJob(job_id);
     const imgRes = await fetch(data.url);
     const blob = await imgRes.blob();
     const file = new File([blob], `creative-${Date.now()}.png`, { type: 'image/png' });

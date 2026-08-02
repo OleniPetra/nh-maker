@@ -450,6 +450,22 @@ function updateButtons() {
 extractedText.addEventListener('input', updateButtons);
 updateButtons();
 
+// Генерация (особенно GPT Image 2) может занимать 2-3 минуты — бэкенд запускает её фоновой
+// job'ой и сразу отдаёт job_id, чтобы ни один отдельный HTTP-запрос не висел так долго (иначе
+// Cloudflare Tunnel обрывает запрос на ~100с и подсовывает свою HTML-страницу вместо JSON).
+async function pollJob(jobId, { intervalMs = 2000 } = {}) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, intervalMs));
+    const res = await fetch(`api/job/${jobId}`);
+    if (!res.ok) throw new Error('Job lookup failed');
+    const job = await res.json();
+    if (job.done) {
+      if (job.error) throw new Error(job.error);
+      return job.result;
+    }
+  }
+}
+
 // ── RUN: один референс = один запрос на генерацию ──
 btnRun.addEventListener('click', async () => {
   const text = extractedText.value.trim();
@@ -481,9 +497,10 @@ btnRun.addEventListener('click', async () => {
       fd.append('text', text);
       fd.append('model', selectedModel);
       fd.append('file', ref.file);
-      const res = await fetch('api/generate', { method: 'POST', body: fd });
-      if (!res.ok) throw new Error((await res.json()).detail || 'Generation failed');
-      const data = await res.json();
+      const startRes = await fetch('api/generate', { method: 'POST', body: fd });
+      if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
+      const { job_id } = await startRes.json();
+      const data = await pollJob(job_id);
       const imgRes = await fetch(data.url);
       const blob = await imgRes.blob();
       const blobUrl = URL.createObjectURL(blob);

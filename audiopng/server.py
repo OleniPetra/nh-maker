@@ -6,6 +6,7 @@ no-human.AudioPng — lightweight template host + FAL.ai image generation proxy.
 под префиксом "/audiopng" в общее FastAPI-приложение вместе с Creatives/Generate/History.
 Вся бизнес-логика (image pipeline, outpaint) не менялась ни строкой.
 """
+import asyncio
 import os
 import io
 import uuid
@@ -26,6 +27,45 @@ for d in (TEMPLATES_DIR,):
 FAL_KEY = os.environ.get("FAL_KEY", "")
 
 router = APIRouter(prefix="/audiopng")
+
+# ── Background jobs for slow FAL calls ──────────────────────────────────────────
+# GPT Image 2 generations have been observed taking 2-3 minutes end to end (t2i + outpaint).
+# Cloudflare's edge (both quick tunnels and the named tunnel we run in production) closes a
+# single proxied HTTP request around ~100s and returns its own HTML error page instead — which
+# breaks the frontend's res.json() with "Unexpected token '<' ... is not valid JSON", since it's
+# parsing an HTML page, not our JSON. Fix: never let a single request run that long. The route
+# handler starts the real work as a background asyncio task and returns a job_id immediately;
+# the frontend polls /api/job/{job_id} every couple seconds instead — each individual HTTP
+# request stays well under any proxy's timeout, no matter how long the total job takes. Reused
+# by Competitors Static (competitors/api.py) for the same reason on its own /api/generate.
+_JOBS: dict[str, dict] = {}
+
+def _start_async_job(coro) -> str:
+    job_id = uuid.uuid4().hex
+    _JOBS[job_id] = {"done": False, "error": None, "result": None}
+
+    async def runner():
+        try:
+            _JOBS[job_id]["result"] = await coro
+        except HTTPException as e:
+            _JOBS[job_id]["error"] = str(e.detail)
+        except Exception as e:
+            _JOBS[job_id]["error"] = str(e)
+        finally:
+            _JOBS[job_id]["done"] = True
+
+    asyncio.create_task(runner())
+    return job_id
+
+def _get_job(job_id: str) -> dict | None:
+    return _JOBS.get(job_id)
+
+@router.get("/api/job/{job_id}")
+async def api_job(job_id: str):
+    job = _get_job(job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    return job
 
 # ── Ad-creative pipeline: generate/upload a save-zone image, then outpaint top/bottom
 # to the final delivery-resolution 1080x1920 (9:16) canvas directly — no separate smaller
@@ -236,21 +276,16 @@ async def upload_ref_image(file: UploadFile = File(...)):
 async def list_creative_models():
     return [{"id": k, "name": v["name"]} for k, v in SAVEZONE_MODELS.items()]
 
-@router.post("/api/generate-creative")
-async def generate_creative(
-    prompt: str = Form(...),
-    model: str = Form("nano-banana-2"),
-):
-    """Generate a text-safe 1080x1350 (4:5) creative, then outpaint the background top/bottom
-    to the final 1080x1920 delivery canvas. Returns {url, savezone_url}."""
-    _require_fal_key()
+async def _do_generate_creative(prompt: str, model: str) -> dict:
+    """The actual (slow) work — see _start_async_job above for why this runs in the background
+    instead of directly in the request handler."""
     if model not in SAVEZONE_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
     cfg = SAVEZONE_MODELS[model]
     payload = cfg["payload"](prompt)
     print(f"[FAL creative] model={model} prompt={prompt!r}", flush=True)
 
-    async with httpx.AsyncClient(timeout=180) as client:
+    async with httpx.AsyncClient(timeout=280) as client:
         resp = await client.post(cfg["t2i"], json=payload, headers={"Authorization": f"Key {FAL_KEY}"})
         if resp.status_code != 200:
             raise HTTPException(resp.status_code, detail=f"Save-zone generation failed: {resp.text}")
@@ -265,6 +300,19 @@ async def generate_creative(
         final_url, method = await _run_outpaint(client, img_resp.content, AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H, OUTPAINT_W, OUTPAINT_H)
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
+
+@router.post("/api/generate-creative")
+async def generate_creative(
+    prompt: str = Form(...),
+    model: str = Form("nano-banana-2"),
+):
+    """Generate a text-safe 1080x1350 (4:5) creative, then outpaint the background top/bottom
+    to the final 1080x1920 delivery canvas. Kicks off the work in the background and returns a
+    job_id immediately (see _start_async_job) — poll GET /api/job/{job_id} for {url, savezone_url,
+    outpaint_method} once done."""
+    _require_fal_key()
+    job_id = _start_async_job(_do_generate_creative(prompt, model))
+    return {"job_id": job_id}
 
 SAVEZONE_SHAPES = {
     "upload": (UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H),   # 🖼️ Upload save-zone — 4:5
