@@ -27,21 +27,18 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 
 router = APIRouter(prefix="/audiopng")
 
-# ── Ad-creative pipeline: generate/upload a save-zone image, then outpaint the ──
-# background top/bottom to a compact 720x1280 (9:16) working canvas. All text/graphics
-# from the save-zone stay inside the untouched center band, so nothing ends up in the
-# newly-painted top/bottom strips.
-#
-# Outpaint runs at this smaller 720-wide working resolution (not the final 1080x1920
-# delivery size) for speed/cost — the frontend then applies a deterministic artificial
-# upscale to 1080x1920 (see normalizeTo1080x1920 in static/index.html), reused via the
-# same addImages()/finalizeEntry() path for BOTH flows below, so this resize happens
-# exactly once, in one shared place, regardless of which flow produced the image.
-OUTPAINT_W, OUTPAINT_H = 720, 1280
+# ── Ad-creative pipeline: generate/upload a save-zone image, then outpaint top/bottom
+# to the final delivery-resolution 1080x1920 (9:16) canvas directly — no separate smaller
+# working canvas + client-side upscale step anymore, the server now delivers Full HD
+# vertical straight away. All text/graphics from the save-zone stay inside the untouched
+# center band, so nothing ends up in the newly-painted top/bottom strips.
+OUTPAINT_W, OUTPAINT_H = 1080, 1920
 
-# Two save-zone shapes feed the same outpaint target above, each via _run_outpaint():
-AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H = 720, 900     # ✨ AI Gen save-zone — 4:5
-UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H = 720, 960   # 🖼️ Upload 3:4 save-zone — 3:4
+# Two save-zone shapes feed the same outpaint target above, each via _run_outpaint() — both
+# 4:5, scaled up from the old smaller working resolution (720x900 / 720x960) to the new
+# 1080-wide delivery resolution, same ratios:
+AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H = 1080, 1350   # ✨ AI Gen save-zone — 4:5
+UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H = 1080, 1350  # 🖼️ Upload save-zone — 4:5
 
 # Purpose-built outpaint model: whole image in, just say how many px to add top/bottom — no
 # mask, no prompt, one call for both edges at once. Replaced the old flux-pro/v1/fill pipeline
@@ -168,16 +165,19 @@ def _make_edge_strip(img: Image.Image, band_y0: int, height: int) -> Image.Image
     band = img.crop((0, band_y0, img.width, band_y0 + EDGE_SOURCE_BAND_PX))
     return band.resize((img.width, height), Image.LANCZOS)
 
-async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezone_w: int, savezone_h: int) -> tuple[str, str]:
+async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezone_w: int, savezone_h: int,
+                         target_w: int, target_h: int) -> tuple[str, str]:
     """Given a save-zone creative (any size — stretched, not cropped, to savezone_w x savezone_h),
-    extend it top/bottom to the shared OUTPAINT_W x OUTPAINT_H working canvas. Flat/solid/gradient
-    edges get a free deterministic stretch; photographic/textured edges go through flux-2-pro/
-    outpaint (whole image, no mask/prompt, one call for both edges). Returns (final_url, method);
-    the caller's frontend applies the artificial upscale to the final 1080x1920 delivery size
-    afterward (same shared step for every flow — see normalizeTo1080x1920 in static/index.html)."""
+    extend it top/bottom to target_w x target_h (same width as the save-zone; only height grows).
+    Flat/solid/gradient edges get a free deterministic stretch; photographic/textured edges go
+    through flux-2-pro/outpaint (whole image, no mask/prompt, one call for both edges). Returns
+    (final_url, method). target_w/target_h are explicit params (not read from module-level
+    constants) so callers — audiopng's own routes AND Competitors Static, which reuses this same
+    function with its own different save-zone/target shape — can't accidentally affect each other
+    if one side's constants change."""
     img = Image.open(io.BytesIO(savezone_bytes)).convert("RGB")
     img = img.resize((savezone_w, savezone_h), Image.LANCZOS)  # stretch/squash to fit exactly, no crop
-    expand_px = (OUTPAINT_H - savezone_h) // 2
+    expand_px = (target_h - savezone_h) // 2
 
     top_mean, top_stdev = _band_stats(img, 0)
     bottom_mean, bottom_stdev = _band_stats(img, savezone_h - 1)
@@ -210,7 +210,7 @@ async def _run_outpaint(client: httpx.AsyncClient, savezone_bytes: bytes, savezo
     # Flat background, OR flux-2-pro call failed — free deterministic edge-stretch.
     top_strip = _make_edge_strip(img, 0, expand_px)
     bottom_strip = _make_edge_strip(img, savezone_h - EDGE_SOURCE_BAND_PX, expand_px)
-    final_canvas = Image.new("RGB", (OUTPAINT_W, OUTPAINT_H))
+    final_canvas = Image.new("RGB", (target_w, target_h))
     final_canvas.paste(top_strip, (0, 0))
     final_canvas.paste(img, (0, expand_px))
     final_canvas.paste(bottom_strip, (0, expand_px + savezone_h))
@@ -241,8 +241,8 @@ async def generate_creative(
     prompt: str = Form(...),
     model: str = Form("nano-banana-2"),
 ):
-    """Generate a text-safe 720x900 (4:5) creative, then outpaint the background top/bottom
-    to the shared 720x1280 working canvas. Returns {url, savezone_url}."""
+    """Generate a text-safe 1080x1350 (4:5) creative, then outpaint the background top/bottom
+    to the final 1080x1920 delivery canvas. Returns {url, savezone_url}."""
     _require_fal_key()
     if model not in SAVEZONE_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
@@ -262,29 +262,30 @@ async def generate_creative(
         if img_resp.status_code != 200:
             raise HTTPException(500, "Failed to download save-zone image")
 
-        final_url, method = await _run_outpaint(client, img_resp.content, AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H)
+        final_url, method = await _run_outpaint(client, img_resp.content, AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H, OUTPAINT_W, OUTPAINT_H)
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
 
 SAVEZONE_SHAPES = {
-    "upload": (UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H),   # 🖼️ Upload 3:4 — 3:4 save-zone
+    "upload": (UPLOAD_SAVEZONE_W, UPLOAD_SAVEZONE_H),   # 🖼️ Upload save-zone — 4:5
     "aigen": (AIGEN_SAVEZONE_W, AIGEN_SAVEZONE_H),      # ✨ AI Gen retry — 4:5 save-zone
 }
 
 @router.post("/api/outpaint-upload")
 async def outpaint_upload(file: UploadFile = File(...), savezone: str = Form("upload")):
-    """Take an uploaded save-zone creative and outpaint its background top/bottom to the shared
-    720x1280 working canvas — same _run_outpaint() pipeline as generate-creative, minus the
-    text-to-image step. `savezone` selects the input shape: "upload" (3:4, the normal Upload
-    3:4 flow) or "aigen" (4:5, used when retrying just the outpaint step on an AI Gen save-zone
-    without re-running the paid generation). Returns {url, outpaint_method}."""
+    """Take an uploaded save-zone creative and outpaint its background top/bottom to the final
+    1080x1920 delivery canvas — same _run_outpaint() pipeline as generate-creative, minus the
+    text-to-image step. `savezone` selects the input shape: "upload" (the normal Upload flow) or
+    "aigen" (used when retrying just the outpaint step on an AI Gen save-zone without re-running
+    the paid generation) — both 4:5 today, kept as separate named shapes in case they diverge
+    again. Returns {url, outpaint_method}."""
     _require_fal_key()
     if savezone not in SAVEZONE_SHAPES:
         raise HTTPException(400, f"Unknown savezone: {savezone}")
     savezone_w, savezone_h = SAVEZONE_SHAPES[savezone]
     content = await file.read()
     async with httpx.AsyncClient(timeout=180) as client:
-        final_url, method = await _run_outpaint(client, content, savezone_w, savezone_h)
+        final_url, method = await _run_outpaint(client, content, savezone_w, savezone_h, OUTPAINT_W, OUTPAINT_H)
     return {"url": final_url, "outpaint_method": method}
 
 # Статика (templates/, static/index.html+ffmpeg) монтируется в unified_server.py

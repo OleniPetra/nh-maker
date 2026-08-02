@@ -5,10 +5,12 @@ Competitors Static — новый раздел: берёт текст из "на
 текст всегда наш собственный.
 
 Переиспользует существующий FAL-инфраструктурный код из audiopng/server.py (upload в
-FAL Storage, аутпеинт 3:4 -> 9:16 через flux-2-pro/outpaint) вместо дублирования — тот
-же _run_outpaint(), тот же UPLOAD_SAVEZONE_W/H шейп (3:4), тот же OUTPAINT_W/H (720x1280)
-целевой холст. Финальный апскейл до 1080x1920 — на фронтенде, тем же normalizeTo1080x1920,
-что и в audiopng (см. static/index.html).
+FAL Storage, аутпеинт через flux-2-pro/outpaint) вместо дублирования — та же _run_outpaint().
+Save-zone/target шейп при этом СВОЙ (см. COMP_SAVEZONE_*/COMP_OUTPAINT_* ниже), не общий с
+audiopng.UPLOAD_SAVEZONE_W/H/OUTPAINT_W/H — специально не читает их напрямую, чтобы будущие
+изменения этих констант в audiopng (например под другое разрешение/пропорции Upload/AI Gen)
+не задевали этот, отдельный, пайплайн молча. Финальный апскейл до 1080x1920 — на фронтенде,
+тем же normalizeTo1080x1920, что и в audiopng (см. static/index.html).
 """
 import base64
 import os
@@ -25,6 +27,11 @@ BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
 
 router = APIRouter(prefix="/competitors")
+
+# Own save-zone/outpaint-target shape — deliberately local, not imported from audiopng, so a
+# future change to audiopng's own Upload/AI Gen constants can't silently change this pipeline.
+COMP_SAVEZONE_W, COMP_SAVEZONE_H = 720, 960     # 3:4 — matches this flow's own generation prompt
+COMP_OUTPAINT_W, COMP_OUTPAINT_H = 720, 1280    # 9:16 working canvas; frontend upscales to 1080x1920
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 VISION_MODEL = "anthropic/claude-haiku-4.5"
@@ -155,7 +162,7 @@ async def api_generate(
             raise HTTPException(500, "Failed to download generated image")
 
         final_url, method = await audiopng._run_outpaint(
-            client, img_resp.content, audiopng.UPLOAD_SAVEZONE_W, audiopng.UPLOAD_SAVEZONE_H
+            client, img_resp.content, COMP_SAVEZONE_W, COMP_SAVEZONE_H, COMP_OUTPAINT_W, COMP_OUTPAINT_H
         )
 
     return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
@@ -169,6 +176,6 @@ async def api_outpaint_only(file: UploadFile = File(...)):
     content = await file.read()
     async with httpx.AsyncClient(timeout=280) as client:
         final_url, method = await audiopng._run_outpaint(
-            client, content, audiopng.UPLOAD_SAVEZONE_W, audiopng.UPLOAD_SAVEZONE_H
+            client, content, COMP_SAVEZONE_W, COMP_SAVEZONE_H, COMP_OUTPAINT_W, COMP_OUTPAINT_H
         )
     return {"url": final_url, "outpaint_method": method}

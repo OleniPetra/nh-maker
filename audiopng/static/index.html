@@ -885,8 +885,8 @@ body {
     <div class="mode-toggle" id="imgModeToggle">
       <div class="mode-toggle-btn mode-toggle-ratio active" data-mode="upload916" id="uploadRatioTab">
         📁 <select id="uploadRatioSelect" title="Соотношение сторон для Upload">
-          <option value="auto">Auto — как на входе</option>
-          <option value="9:16" selected>9:16 — 1080×1920</option>
+          <option value="auto" selected>Auto — как на входе</option>
+          <option value="9:16">9:16 — 1080×1920</option>
           <option value="16:9">16:9 — 1920×1080</option>
           <option value="1:1">1:1 — 1080×1080</option>
           <option value="5:4">5:4 — 1350×1080</option>
@@ -1234,7 +1234,7 @@ const UPLOAD_RATIOS = {
   '3:4':  { w: 1080, h: 1440 },
   '4:3':  { w: 1440, h: 1080 },
 };
-let selectedUploadRatio = '9:16';
+let selectedUploadRatio = 'auto';
 
 // Растяжение/сжатие ПОД конкретное соотношение без обрезки (в отличие от normalizeTo1080x1920
 // ниже, которое всегда cover-fit + crop до фиксированных 1080x1920) — так просил пользователь
@@ -1830,7 +1830,7 @@ async function generateCreative() {
   btnGenerate.disabled = true;
   genStatusMsg.style.display = 'block';
   genStatusMsg.style.color = 'var(--text-muted)';
-  genStatusMsg.textContent = 'Generating save-zone creative (720×900)…';
+  genStatusMsg.textContent = 'Generating save-zone creative (1080×1350)…';
   try {
     const fd = new FormData();
     fd.append('prompt', prompt);
