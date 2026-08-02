@@ -581,6 +581,15 @@ body {
   color: var(--accent-blue);
 }
 
+.master-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
 /* Column 3: Overlay Adjustment Cards - 85% Preview Width, 15% Sliders */
 .adjust-card {
   background: var(--bg-surface);
@@ -1009,7 +1018,7 @@ body {
       <div><span class="col-step">5</span>Preview & Export</div>
     </div>
     <div class="preview-area" id="previewArea">
-      <div class="preview-video-wrap">
+      <div class="preview-video-wrap" id="previewVideoWrap">
         <div class="placeholder" id="placeholder">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <polygon points="5 3 19 12 5 21 5 3"/>
@@ -1108,6 +1117,7 @@ const globalProgressWrap = $('globalProgressWrap');
 const globalProgressBar = $('globalProgressBar');
 const videoPlayer = $('videoPlayer'); const placeholder = $('placeholder');
 const imagePreview = $('imagePreview');
+const previewVideoWrap = $('previewVideoWrap');
 const fileList = $('fileList');
 const imgModeToggle = $('imgModeToggle'); const genPrompt = $('genPrompt');
 const genModel = $('genModel');
@@ -1154,6 +1164,14 @@ uploadRatioSelect.addEventListener('click', e => e.stopPropagation());
 uploadRatioSelect.addEventListener('change', e => {
   selectedUploadRatio = e.target.value;
 });
+
+// Вписывает targetW x targetH в рамку maxW x maxH с сохранением точного соотношения сторон —
+// используется во всех превью (миниатюра очереди, per-image редактор оверлея, финальный
+// превью в колонке 5), чтобы форма превью реально совпадала с выбранным на загрузке форматом.
+function fitBox(targetW, targetH, maxW, maxH) {
+  const scale = Math.min(maxW / targetW, maxH / targetH);
+  return { w: Math.round(targetW * scale), h: Math.round(targetH * scale) };
+}
 
 // ── local state ─────────────────────────────────────────────
 let images = [];        // { id, name, file, blobUrl, logoYSlider, logoScale, discYSlider, discScale }
@@ -1338,10 +1356,12 @@ function removeImage(id) {
 }
 
 function renderImages() {
-  imgQueue.innerHTML = images.map(img => `
+  imgQueue.innerHTML = images.map(img => {
+    const { w: thumbW, h: thumbH } = fitBox(img.targetW || TARGET_W, img.targetH || TARGET_H, 144, 256);
+    return `
     <div class="img-item${img.status === 'processing' ? ' processing' : ''}">
-      <div class="img-thumb">
-        <img src="${img.blobUrl}" loading="lazy">
+      <div class="img-thumb" style="width:${thumbW}px;height:${thumbH}px">
+        <img src="${img.blobUrl}" loading="lazy" style="width:${thumbW}px;height:${thumbH}px">
         ${img.status === 'processing' ? '<div class="spinner-overlay"><div class="sc-spinner"></div></div>' : ''}
       </div>
       <div class="info">
@@ -1351,7 +1371,8 @@ function renderImages() {
       ${img.retryKind && img.status === 'ready' ? `<button class="retry" data-id="${img.id}" title="Повторить только аутпеинт">↻</button>` : ''}
       <button class="del" data-id="${img.id}">✕</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
   imgCount.textContent = `${images.length} / 50`;
   imgQueue.querySelectorAll('.del').forEach(btn => {
     btn.addEventListener('click', () => removeImage(btn.dataset.id));
@@ -1662,12 +1683,14 @@ function renderOverlayAdjustList(slot) {
     return;
   }
 
-  container.innerHTML = images.map((img, idx) => `
+  container.innerHTML = images.map((img, idx) => {
+    const { w: cw, h: ch } = fitBox(img.targetW || TARGET_W, img.targetH || TARGET_H, 216, 384);
+    return `
     <div class="adjust-card" data-idx="${idx}">
-      <div class="adjust-card-header">${idx + 1}. ${esc(img.name)}${st.selectedAutoGroup ? ` <span class="tone-badge" id="toneBadge-${slot}-${idx}">${img.overlayTone ? `[auto: ${img.overlayTone}]` : '[detecting…]'}</span>` : ''}</div>
+      <div class="adjust-card-header">${idx + 1}. ${esc(img.name)}${idx === 0 ? ' <span class="master-badge" title="Меняет расположение/размер сразу у всех файлов">★ master</span>' : ''}${st.selectedAutoGroup ? ` <span class="tone-badge" id="toneBadge-${slot}-${idx}">${img.overlayTone ? `[auto: ${img.overlayTone}]` : '[detecting…]'}</span>` : ''}</div>
       <div class="adjust-card-body">
         <div class="adjust-preview-box">
-          <canvas width="216" height="384" class="adjust-canvas" data-idx="${idx}"></canvas>
+          <canvas width="${cw}" height="${ch}" class="adjust-canvas" data-idx="${idx}"></canvas>
         </div>
         <div class="adjust-sliders-wrap">
           <div class="v-slider-control">
@@ -1681,7 +1704,26 @@ function renderOverlayAdjustList(slot) {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+
+  // Первая карточка (idx===0, "★ master" — то же, что показано пользователю как "1. ...") при
+  // изменении транслирует свои Y/Scale на ВСЕ остальные файлы; любая другая карточка меняет
+  // только себя. Мастер выбирается по текущей позиции в списке (не по id) — специально: новые
+  // загрузки встают в начало списка (images.unshift), так что "первый файл" — это буквально то,
+  // что показано как "1." в интерфейсе, а не исторически первая загрузка.
+  function broadcastToOthers(key, val, skipCard) {
+    images.forEach(im => { im[key] = val; });
+    container.querySelectorAll('.adjust-card').forEach(otherCard => {
+      if (otherCard === skipCard) return;
+      const otherImg = images[+otherCard.dataset.idx];
+      const otherYSlider = otherCard.querySelector('.y-slider');
+      const otherScaleSlider = otherCard.querySelector('.scale-slider');
+      if (key === keys.y) otherYSlider.value = val;
+      if (key === keys.scale) otherScaleSlider.value = val;
+      updateAdjustCanvasSync(slot, otherImg, otherCard.querySelector('.adjust-canvas'));
+    });
+  }
 
   // Attach slider listeners & update canvas previews synchronously via Cached Bitmaps
   container.querySelectorAll('.adjust-card').forEach(card => {
@@ -1694,13 +1736,17 @@ function renderOverlayAdjustList(slot) {
     const redraw = () => updateAdjustCanvasSync(slot, img, canvas);
 
     ySlider.addEventListener('input', () => {
-      img[keys.y] = +ySlider.value;
+      const val = +ySlider.value;
+      img[keys.y] = val;
       redraw();
+      if (idx === 0) broadcastToOthers(keys.y, val, card);
     });
 
     scaleSlider.addEventListener('input', () => {
-      img[keys.scale] = +scaleSlider.value;
+      const val = +scaleSlider.value;
+      img[keys.scale] = val;
       redraw();
+      if (idx === 0) broadcastToOthers(keys.scale, val, card);
     });
 
     // Initial async decode then render
@@ -2119,6 +2165,7 @@ btnMerge.addEventListener('click', async () => {
         blob: mp4Blob,
         blobUrl,
         type: 'video',
+        targetW: TARGET_W, targetH: TARGET_H, // video всегда 1080x1920, независимо от img.targetW/H
       });
     }
 
@@ -2178,6 +2225,7 @@ btnRunImagesOnly.addEventListener('click', async () => {
         blob: pngBlob,
         blobUrl,
         type: 'image',
+        targetW: img.targetW || TARGET_W, targetH: img.targetH || TARGET_H,
       });
     }
 
@@ -2214,6 +2262,7 @@ function renderOutputFiles() {
     placeholder.style.display = 'flex';
     videoPlayer.style.display = 'none';
     imagePreview.style.display = 'none';
+    previewVideoWrap.style.aspectRatio = `${TARGET_W} / ${TARGET_H}`;
   } else {
     previewOutput(0);
   }
@@ -2224,6 +2273,7 @@ function previewOutput(idx) {
   if (fileList.children[idx]) fileList.children[idx].classList.add('active');
   placeholder.style.display = 'none';
   const file = outputFiles[idx];
+  previewVideoWrap.style.aspectRatio = `${file.targetW || TARGET_W} / ${file.targetH || TARGET_H}`;
   if (file.type === 'image') {
     videoPlayer.pause();
     videoPlayer.style.display = 'none';
