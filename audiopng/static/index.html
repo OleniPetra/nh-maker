@@ -290,6 +290,10 @@ body {
 .mode-toggle-ratio select {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: inherit;
@@ -360,6 +364,9 @@ body {
   border: 1px solid var(--border-color);
   transition: all 0.15s ease;
   box-shadow: var(--shadow-sm);
+  max-width: 100%;
+  overflow: hidden; /* safety net — thumb width is set inline per-image (fitBox), this just
+                        guarantees it can never visually escape the row regardless of ratio */
 }
 
 .img-item:hover {
@@ -370,13 +377,16 @@ body {
   position: relative;
   width: 144px;
   height: 256px;
+  max-width: 144px;
+  max-height: 256px;
   flex-shrink: 0;
 }
 
 .img-thumb img {
-  width: 144px;
-  height: 256px;
-  aspect-ratio: 9 / 16;
+  width: 100%;
+  height: 100%;
+  max-width: 144px;
+  max-height: 256px;
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -885,14 +895,14 @@ body {
     <div class="mode-toggle" id="imgModeToggle">
       <div class="mode-toggle-btn mode-toggle-ratio active" data-mode="upload916" id="uploadRatioTab">
         📁 <select id="uploadRatioSelect" title="Соотношение сторон для Upload">
-          <option value="auto" selected>Auto — как на входе</option>
-          <option value="9:16">9:16 — 1080×1920</option>
-          <option value="16:9">16:9 — 1920×1080</option>
-          <option value="1:1">1:1 — 1080×1080</option>
-          <option value="5:4">5:4 — 1350×1080</option>
-          <option value="4:5">4:5 — 1080×1350</option>
-          <option value="3:4">3:4 — 1080×1440</option>
-          <option value="4:3">4:3 — 1440×1080</option>
+          <option value="auto" selected>Auto</option>
+          <option value="9:16">9:16</option>
+          <option value="16:9">16:9</option>
+          <option value="1:1">1:1</option>
+          <option value="5:4">5:4</option>
+          <option value="4:5">4:5</option>
+          <option value="3:4">3:4</option>
+          <option value="4:3">4:3</option>
         </select>
       </div>
       <button type="button" class="mode-toggle-btn" data-mode="upload34">🖼️ Upload 3:4</button>
@@ -1164,6 +1174,7 @@ const uploadRatioSelect = $('uploadRatioSelect');
 uploadRatioSelect.addEventListener('click', e => e.stopPropagation());
 uploadRatioSelect.addEventListener('change', e => {
   selectedUploadRatio = e.target.value;
+  updateUploadRatioTitle();
 });
 
 // Вписывает targetW x targetH в рамку maxW x maxH с сохранением точного соотношения сторон —
@@ -1235,6 +1246,15 @@ const UPLOAD_RATIOS = {
   '4:3':  { w: 1440, h: 1080 },
 };
 let selectedUploadRatio = 'auto';
+
+// Пункты дропдауна нарочно короткие (не влезают вместе с иконкой в узкий таб) — полное
+// описание с пикселями показываем во всплывающей подсказке на самом select.
+function updateUploadRatioTitle() {
+  uploadRatioSelect.title = selectedUploadRatio === 'auto'
+    ? 'Auto — как на входе, без изменений'
+    : `${selectedUploadRatio} — ${UPLOAD_RATIOS[selectedUploadRatio].w}×${UPLOAD_RATIOS[selectedUploadRatio].h}`;
+}
+updateUploadRatioTitle();
 
 // Растяжение/сжатие ПОД конкретное соотношение без обрезки (в отличие от normalizeTo1080x1920
 // ниже, которое всегда cover-fit + crop до фиксированных 1080x1920) — так просил пользователь
