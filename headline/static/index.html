@@ -191,7 +191,15 @@ body {
 .file-item:hover { background: #e2e8f0; }
 .file-item.active { background: #dbeafe; color: var(--accent-blue); font-weight: 600; }
 .file-item.processing { color: #d97706; cursor: default; }
+.file-item.error { background: #fef2f2; color: var(--accent-red); cursor: default; }
 .file-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item-retry {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg-surface);
+  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center;
+  justify-content: center; transition: all 0.15s ease;
+}
+.file-item-retry:hover:not(:disabled) { background: var(--accent-blue); color: #fff; }
+.file-item-retry:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -287,7 +295,10 @@ const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList
 const MAX_HEADLINES = 20;
 const MAX_CREATIVES = 3;
 let creatives = []; // { id, file, blobUrl, name }
-let outputFiles = []; // { id, name, blob, blobUrl, type: 'image' }
+// { id, name, text, file, status: 'generating'|'done'|'error', blob, blobUrl, errorMsg } — keeps
+// text+file per entry (not just an index into headlines/creatives) so a retry still works even
+// after the source fields have changed or the creative was removed from column 2.
+let outputFiles = [];
 
 // ── Шаг 1: заголовки — растущий список, до MAX_HEADLINES ──
 // Поле только ДОБАВЛЯЕТСЯ, когда заполняется последнее — никогда не удаляется само по себе
@@ -385,8 +396,9 @@ renderRefGrid();
 function updateButtons() {
   updateHeadlineChrome();
   btnRun.disabled = getHeadlines().length === 0 || creatives.length === 0;
-  btnDownload.disabled = outputFiles.length === 0;
-  btnSendToNH.disabled = outputFiles.length === 0;
+  const doneCount = outputFiles.filter(f => f.status === 'done').length;
+  btnDownload.disabled = doneCount === 0;
+  btnSendToNH.disabled = doneCount === 0;
 }
 updateButtons();
 
@@ -406,22 +418,55 @@ async function pollJob(jobId, { intervalMs = 2000 } = {}) {
   }
 }
 
+// Один (заголовок, креатив) запрос — используется и первым проходом RUN, и retry(idx) для
+// перегенерации одной штуки. Мутирует entry напрямую (тот же объект, что уже в outputFiles).
+async function runOne(entry) {
+  entry.status = 'generating';
+  entry.errorMsg = null;
+  renderOutputFiles();
+  try {
+    const fd = new FormData();
+    fd.append('text', entry.text);
+    fd.append('file', entry.file);
+    const startRes = await fetch('api/generate', { method: 'POST', body: fd });
+    if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
+    const { job_id } = await startRes.json();
+    const data = await pollJob(job_id);
+    const imgRes = await fetch(data.url);
+    const blob = await imgRes.blob();
+    if (entry.blobUrl) URL.revokeObjectURL(entry.blobUrl);
+    entry.blob = blob;
+    entry.blobUrl = URL.createObjectURL(blob);
+    entry.status = 'done';
+  } catch (e) {
+    console.error('generate failed for', entry.text, entry.name, e);
+    entry.status = 'error';
+    entry.errorMsg = e.message;
+  }
+  renderOutputFiles();
+  updateButtons();
+}
+
 // ── RUN: каждый заголовок x каждый креатив = отдельный запрос на генерацию ──
 btnRun.addEventListener('click', async () => {
   const headlines = getHeadlines();
   if (!headlines.length || !creatives.length) return;
   btnRun.disabled = true;
   btnDownload.disabled = true;
+  outputFiles.forEach(f => { if (f.blobUrl) URL.revokeObjectURL(f.blobUrl); });
   outputFiles = [];
+  headlines.forEach((text, hIdx) => creatives.forEach((cr, cIdx) => {
+    outputFiles.push({
+      id: uid(),
+      name: `h${hIdx + 1}-${cr.name.replace(/\.[^.]+$/, '')}-headline.png`,
+      text, file: cr.file, status: 'pending', blob: null, blobUrl: null, errorMsg: null,
+    });
+  }));
   renderOutputFiles();
 
-  const pairs = [];
-  headlines.forEach((text, hIdx) => creatives.forEach((cr, cIdx) => pairs.push({ text, hIdx, cr, cIdx })));
-  const totalSteps = pairs.length;
-  let currentStep = 0;
-  function updateProgress(msg, stepDone) {
-    if (stepDone !== undefined) currentStep = stepDone;
-    const pct = Math.round((currentStep / totalSteps) * 100);
+  const total = outputFiles.length;
+  function updateProgress(msg, doneCount) {
+    const pct = Math.round((doneCount / total) * 100);
     globalProgressWrap.style.display = 'block';
     globalProgressBar.className = 'progress-bar';
     globalProgressBar.style.width = pct + '%';
@@ -430,34 +475,13 @@ btnRun.addEventListener('click', async () => {
     runProgress.textContent = msg;
   }
 
-  let failCount = 0;
-  for (let i = 0; i < pairs.length; i++) {
-    const { text, hIdx, cr, cIdx } = pairs[i];
-    updateProgress(`Generating ${i + 1}/${pairs.length}: заголовок ${hIdx + 1} × ${cr.name}`, i);
-    try {
-      const fd = new FormData();
-      fd.append('text', text);
-      fd.append('file', cr.file);
-      const startRes = await fetch('api/generate', { method: 'POST', body: fd });
-      if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
-      const { job_id } = await startRes.json();
-      const data = await pollJob(job_id);
-      const imgRes = await fetch(data.url);
-      const blob = await imgRes.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      outputFiles.push({
-        id: uid(),
-        name: `h${hIdx + 1}-${cr.name.replace(/\.[^.]+$/, '')}-headline.png`,
-        blob, blobUrl, type: 'image',
-      });
-      renderOutputFiles();
-    } catch (e) {
-      console.error('generate failed for', text, cr.name, e);
-      failCount++;
-    }
-    currentStep = i + 1;
+  for (let i = 0; i < outputFiles.length; i++) {
+    const entry = outputFiles[i];
+    updateProgress(`Generating ${i + 1}/${total}: ${entry.name}`, i);
+    await runOne(entry);
   }
 
+  const failCount = outputFiles.filter(f => f.status === 'error').length;
   globalProgressBar.style.width = '100%';
   if (failCount === 0) {
     globalProgressBar.className = 'progress-bar done';
@@ -467,30 +491,58 @@ btnRun.addEventListener('click', async () => {
     globalProgressBar.className = 'progress-bar error';
     runProgress.className = 'status-bar';
     runProgress.style.color = '#ef4444';
-    runProgress.textContent = `Done with ${failCount} error(s) — ${outputFiles.length} creative(s) ready`;
+    runProgress.textContent = `Done with ${failCount} error(s) — retry them individually below`;
   }
   updateButtons();
 });
 
+// Перегенерировать ОДНУ пару (заголовок, креатив) — например если конкретная генерация
+// провалилась или получилась неудачно, без повторного запуска всех остальных.
+async function retryOne(idx) {
+  const entry = outputFiles[idx];
+  if (!entry || entry.status === 'generating') return;
+  await runOne(entry);
+}
+
 // ── Output / Preview ──
 function renderOutputFiles() {
-  fileList.innerHTML = outputFiles.map((f, i) => `
-    <div class="file-item" data-idx="${i}">
+  const prevActiveIdx = fileList.querySelector('.file-item.active')?.dataset.idx;
+  fileList.innerHTML = outputFiles.map((f, i) => {
+    const busy = f.status === 'pending' || f.status === 'generating';
+    const failed = f.status === 'error';
+    const cls = busy ? 'processing' : failed ? 'error' : '';
+    const label = busy ? 'Генерирую…' : failed ? `Ошибка: ${esc(f.errorMsg || 'unknown')}` : esc(f.name);
+    return `
+    <div class="file-item${cls ? ' ' + cls : ''}" data-idx="${i}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span class="file-item-name">${esc(f.name)}</span>
-    </div>
-  `).join('');
+      <span class="file-item-name" title="${esc(f.name)}">${label}</span>
+      <button class="file-item-retry" data-idx="${i}" title="Retry" ${busy ? 'disabled' : ''}>↻</button>
+    </div>`;
+  }).join('');
   fileList.querySelectorAll('.file-item').forEach(el => {
-    el.addEventListener('click', () => previewOutput(+el.dataset.idx));
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.file-item-retry')) return;
+      if (outputFiles[+el.dataset.idx].status === 'done') previewOutput(+el.dataset.idx);
+    });
   });
-  if (outputFiles.length === 0) {
+  fileList.querySelectorAll('.file-item-retry').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      retryOne(+btn.dataset.idx);
+    });
+  });
+  const doneIdxs = outputFiles.map((f, i) => f.status === 'done' ? i : -1).filter(i => i >= 0);
+  if (!doneIdxs.length) {
     placeholder.style.display = 'flex';
     imagePreview.style.display = 'none';
+  } else if (prevActiveIdx !== undefined && outputFiles[+prevActiveIdx]?.status === 'done') {
+    previewOutput(+prevActiveIdx);
   } else {
-    previewOutput(outputFiles.length - 1);
+    previewOutput(doneIdxs[doneIdxs.length - 1]);
   }
 }
 function previewOutput(idx) {
+  if (!outputFiles[idx] || outputFiles[idx].status !== 'done') return;
   document.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
   if (fileList.children[idx]) fileList.children[idx].classList.add('active');
   placeholder.style.display = 'none';
@@ -499,9 +551,10 @@ function previewOutput(idx) {
 }
 
 btnDownload.addEventListener('click', async () => {
-  if (!outputFiles.length) return;
+  const done = outputFiles.filter(f => f.status === 'done');
+  if (!done.length) return;
   const zip = new JSZip();
-  outputFiles.forEach(f => zip.file(f.name, f.blob));
+  done.forEach(f => zip.file(f.name, f.blob));
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
@@ -517,12 +570,13 @@ btnDownload.addEventListener('click', async () => {
 // IndexedDB-"ящик" (scripts/shared/handoff.js) — audiopng сам их забирает на своей стороне
 // и прогоняет через тот же addImages(), что и обычная ручная загрузка.
 btnSendToNH.addEventListener('click', async () => {
-  if (!outputFiles.length || !window.NHHandoff) return;
+  const done = outputFiles.filter(f => f.status === 'done');
+  if (!done.length || !window.NHHandoff) return;
   btnSendToNH.disabled = true;
   const prevLabel = btnSendToNH.innerHTML;
   btnSendToNH.innerHTML = 'Отправляю…';
   try {
-    await NHHandoff.stage(outputFiles.map(f => ({ name: f.name, blob: f.blob })));
+    await NHHandoff.stage(done.map(f => ({ name: f.name, blob: f.blob })));
     location.href = '/audiopng/?import=1';
   } catch (e) {
     console.error('send to NH failed', e);
