@@ -36,6 +36,12 @@
       external: "/competitors/",
       icon: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="17" cy="16" r="4"/><path d="M8 12v0M13 13.5l1.5 1"/></svg>',
     },
+    {
+      id: "headline",
+      title: "Headline",
+      external: "/headline/",
+      icon: '<svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M6 12h12"/></svg>',
+    },
   ];
   var SPA_IDS = ITEMS.filter(function (it) { return !it.external; }).map(function (it) { return it.id; });
   var EXTERNAL_ITEMS = ITEMS.filter(function (it) { return it.external; });

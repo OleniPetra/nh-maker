@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Competitors Static</title>
+<title>Headline</title>
 <link rel="icon" type="image/svg+xml" href="/static-shared/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  /* Единая палитра Static Creo (см. audiopng/static/index.html, scripts/review_ui.html) */
+  /* Единая палитра Static Creo (см. audiopng/static/index.html, competitors/static/index.html) */
   --bg-page: #EAE3D5;
   --bg-surface: #ffffff;
   --bg-subtle: #F1EADC;
@@ -93,7 +93,7 @@ body {
 
 .container {
   display: grid;
-  grid-template-columns: 1.6fr 1.6fr 1.1fr 1.7fr;
+  grid-template-columns: 1.4fr 1.3fr 1.9fr;
   flex: 1;
   height: calc(100vh - 56px);
   overflow-x: auto;
@@ -102,7 +102,7 @@ body {
 
 .column {
   display: flex; flex-direction: column; background: var(--bg-surface);
-  border-right: 1px solid var(--border-color); overflow-y: auto; min-width: 220px;
+  border-right: 1px solid var(--border-color); overflow-y: auto; min-width: 240px;
 }
 .column:last-child { border-right: none; background: var(--bg-page); }
 
@@ -128,66 +128,50 @@ body {
 .dropzone:hover, .dropzone.dragover { border-color: var(--accent-blue); background: #f0f7ff; color: var(--accent-blue); }
 .dropzone input[type=file] { display: none; }
 .dropzone-icon { width: 22px; height: 22px; stroke: currentColor; opacity: 0.7; }
+.dropzone.disabled { opacity: 0.45; pointer-events: none; }
 
-.our-creative-preview {
-  margin: 0 auto 12px; border-radius: var(--radius-md); overflow: hidden;
-  border: 1px solid var(--border-color); position: relative; background: #09090b;
-  aspect-ratio: 9 / 16; max-width: 170px; width: 100%; display: flex; align-items: center; justify-content: center;
-}
-.our-creative-preview img { width: 100%; height: 100%; object-fit: contain; }
-.our-creative-preview .spinner-overlay {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.35);
-}
-.sc-spinner {
-  width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.35); border-top-color: #fff;
-  border-radius: 50%; animation: sc-spin 0.8s linear infinite;
-}
-@keyframes sc-spin { to { transform: rotate(360deg); } }
-
-.extracted-text-wrap { margin: 0 12px 12px; }
-.extracted-text-wrap label {
-  display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
-}
-.extracted-text-wrap textarea {
-  width: 100%; min-height: 320px; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
+/* ── Col 1: динамический список заголовков ── */
+.headline-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.headline-row { display: flex; align-items: flex-start; gap: 6px; }
+.headline-input {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
   background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-  padding: 8px; resize: vertical; outline: none; line-height: 1.5;
+  padding: 8px; resize: vertical; outline: none; line-height: 1.4; min-height: 42px;
 }
-.extracted-text-wrap textarea:focus { border-color: var(--accent-blue); }
-.extracted-text-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+.headline-input:focus { border-color: var(--accent-blue); }
+.headline-del {
+  flex-shrink: 0; width: 26px; height: 26px; margin-top: 2px; border-radius: 50%; border: none;
+  background: var(--bg-subtle); color: var(--text-muted); cursor: pointer; font-size: 0.7rem;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;
+}
+.headline-del:hover { background: var(--accent-red); color: #fff; }
+.headline-count { padding: 0 12px 10px; font-size: 0.68rem; color: var(--text-muted); }
 
+/* ── Col 2: до 3 креативов ── */
 .ref-grid { flex: 1; padding: 0 12px 12px; margin-top: -2px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
 .ref-item {
   position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);
-  aspect-ratio: 9 / 16; background: #09090b; box-shadow: var(--shadow-sm);
+  aspect-ratio: 3 / 4; background: #09090b; box-shadow: var(--shadow-sm);
 }
-.ref-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ref-item img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ref-item .del {
   position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: none;
   background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; font-size: 0.7rem; display: flex;
   align-items: center; justify-content: center; transition: all 0.15s ease;
 }
 .ref-item .del:hover { background: var(--accent-red); }
+.ref-item .fname {
+  position: absolute; bottom: 0; left: 0; right: 0; padding: 4px 6px; font-size: 0.6rem; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .ref-none { grid-column: 1 / -1; padding: 20px 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
 
-.model-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.model-opt {
-  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md);
-  border: 1px solid var(--border-color); background: var(--bg-surface); cursor: pointer; transition: all 0.15s ease;
-}
-.model-opt:hover { border-color: var(--border-hover); }
-.model-opt.active { border-color: var(--accent-blue); background: #f0f7ff; }
-.model-opt input { margin-top: 2px; accent-color: var(--accent-blue); }
-.model-opt .model-name { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); }
-.model-opt .model-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
-
+/* ── Col 3: preview & export ── */
 .preview-area { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; padding: 14px; gap: 12px; }
 .preview-video-wrap {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #09090b;
   border-radius: var(--radius-lg); border: 1px solid #27272a; overflow: hidden; box-shadow: var(--shadow-md);
-  max-height: 380px; aspect-ratio: 9 / 16; margin: 0 auto; width: 100%; max-width: 210px; position: relative;
+  max-height: 380px; aspect-ratio: 3 / 4; margin: 0 auto; width: 100%; max-width: 260px; position: relative;
 }
 .preview-video-wrap img#imagePreview { width: 100%; height: 100%; object-fit: contain; display: none; }
 .preview-video-wrap .placeholder {
@@ -207,24 +191,15 @@ body {
 .file-item:hover { background: #e2e8f0; }
 .file-item.active { background: #dbeafe; color: var(--accent-blue); font-weight: 600; }
 .file-item.processing { color: #d97706; cursor: default; }
-.file-item-name {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.file-item-retry {
-  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg-surface);
-  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center;
-  justify-content: center; transition: all 0.15s ease;
-}
-.file-item-retry:hover:not(:disabled) { background: var(--accent-blue); color: #fff; }
-.file-item-retry:disabled { opacity: 0.4; cursor: not-allowed; }
+.file-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="brand">
-    <div class="brand-logo">CS</div>
-    <span class="brand-title">Competitors Static</span>
+    <div class="brand-logo">HL</div>
+    <span class="brand-title">Headline</span>
   </div>
   <div class="header-actions">
     <span class="status-bar" id="runProgress" style="display:none"></span>
@@ -245,59 +220,41 @@ body {
 
 <div class="app">
 <div id="sc-sidebar-root"></div>
-<script src="/static-shared/sidebar.js?v=3"></script>
+<script src="/static-shared/sidebar.js?v=2"></script>
 <div class="app-content">
 <div class="container">
 
-  <!-- COL 1: Наш креатив -->
+  <!-- COL 1: Заголовки -->
   <div class="column">
-    <div class="col-header"><div><span class="col-step">1</span>Наш креатив</div></div>
-    <div class="col-sub">Загрузи картинку с текстом — vision-модель вытащит только текст, остальное (стиль, картинка) не используется.</div>
-    <div class="dropzone" id="ourDropzone">
-      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span>Drop image here<br><span style="color:var(--text-muted);font-size:0.7rem">PNG, JPG, WebP</span></span>
-      <input type="file" id="ourInput" accept="image/*">
-    </div>
-    <div class="our-creative-preview" id="ourPreview" style="display:none">
-      <img id="ourPreviewImg" alt="">
-      <div class="spinner-overlay" id="ourSpinner" style="display:none"><div class="sc-spinner"></div></div>
-    </div>
-    <div class="extracted-text-wrap" id="extractedTextWrap" style="display:none">
-      <label>Извлечённый текст (можно поправить)</label>
-      <textarea id="extractedText" placeholder="Текст появится здесь после извлечения…"></textarea>
-      <div class="extracted-text-hint" id="extractStatus"></div>
-    </div>
+    <div class="col-header"><div><span class="col-step">1</span>Заголовки</div></div>
+    <div class="col-sub">Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу.</div>
+    <div class="headline-list" id="headlineList"></div>
+    <div class="headline-count" id="headlineCount"></div>
   </div>
 
-  <!-- COL 2: Референсы от конкурентов -->
+  <!-- COL 2: Креативы -->
   <div class="column">
     <div class="col-header">
-      <div><span class="col-step">2</span>Референсы конкурентов</div>
-      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 / 10</span>
+      <div><span class="col-step">2</span>Креативы</div>
+      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 / 3</span>
     </div>
-    <div class="col-sub">До 10 картинок — стиль/расположение элементов каждого референса используется отдельно. Каждый референс = отдельная генерация.</div>
+    <div class="col-sub">До 3 статичных рекламных креативов (headline/body/CTA). nano-banana-2 сама определит заголовок на картинке и заменит его — остальное не трогается.</div>
     <div class="dropzone" id="refDropzone">
       <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span>Drop reference images here<br><span style="color:var(--text-muted);font-size:0.7rem">up to 10</span></span>
+      <span>Drop creatives here<br><span style="color:var(--text-muted);font-size:0.7rem">up to 3</span></span>
       <input type="file" id="refInput" accept="image/*" multiple>
     </div>
     <div class="ref-grid" id="refGrid"></div>
   </div>
 
-  <!-- COL 3: Модель -->
+  <!-- COL 3: Preview & Export -->
   <div class="column">
-    <div class="col-header"><div><span class="col-step">3</span>Модель</div></div>
-    <div class="model-list" id="modelList"></div>
-  </div>
-
-  <!-- COL 4: Preview & Export -->
-  <div class="column">
-    <div class="col-header"><div><span class="col-step">4</span>Preview & Export</div></div>
+    <div class="col-header"><div><span class="col-step">3</span>Preview & Export</div></div>
     <div class="preview-area">
       <div class="preview-video-wrap">
         <div class="placeholder" id="placeholder">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          <p>Заполни шаги 1-3 и нажми RUN<br><span style="color:var(--text-muted);font-size:0.68rem">9:16 Vertical Preview</span></p>
+          <p>Заполни шаги 1-2 и нажми RUN<br><span style="color:var(--text-muted);font-size:0.68rem">заголовки × креативы</span></p>
         </div>
         <img id="imagePreview" alt="">
       </div>
@@ -320,22 +277,64 @@ function $(id) { return document.getElementById(id); }
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
-const ourDropzone = $('ourDropzone'), ourInput = $('ourInput');
-const ourPreview = $('ourPreview'), ourPreviewImg = $('ourPreviewImg'), ourSpinner = $('ourSpinner');
-const extractedTextWrap = $('extractedTextWrap'), extractedText = $('extractedText'), extractStatus = $('extractStatus');
+const headlineList = $('headlineList'), headlineCount = $('headlineCount');
 const refDropzone = $('refDropzone'), refInput = $('refInput'), refGrid = $('refGrid'), refCount = $('refCount');
-const modelList = $('modelList');
 const btnRun = $('btnRun'), btnDownload = $('btnDownload'), btnSendToNH = $('btnSendToNH');
 const runProgress = $('runProgress');
 const globalProgressWrap = $('globalProgressWrap'), globalProgressBar = $('globalProgressBar');
 const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList = $('fileList');
 
-const MAX_REFS = 10;
-let ourCreativeFile = null;
-let references = []; // { id, file, blobUrl, name }
-let selectedModel = null;
-let outputFiles = []; // { name, blob, blobUrl, type: 'image' }
+const MAX_HEADLINES = 20;
+const MAX_CREATIVES = 3;
+let creatives = []; // { id, file, blobUrl, name }
+let outputFiles = []; // { id, name, blob, blobUrl, type: 'image' }
 
+// ── Шаг 1: заголовки — растущий список, до MAX_HEADLINES ──
+// Поле только ДОБАВЛЯЕТСЯ, когда заполняется последнее — никогда не удаляется само по себе
+// (чтобы не терять фокус/текст при вводе); удалить лишнее можно вручную кнопкой "✕".
+function addHeadlineRow() {
+  const idx = headlineList.children.length;
+  const row = document.createElement('div');
+  row.className = 'headline-row';
+  row.innerHTML =
+    `<textarea class="headline-input" placeholder="Заголовок ${idx + 1}" rows="2"></textarea>` +
+    `<button type="button" class="headline-del" title="Удалить">✕</button>`;
+  const textarea = row.querySelector('textarea');
+  const delBtn = row.querySelector('.headline-del');
+  textarea.addEventListener('input', () => onHeadlineInput(row, textarea));
+  delBtn.addEventListener('click', () => removeHeadlineRow(row));
+  headlineList.appendChild(row);
+  updateHeadlineChrome();
+  return row;
+}
+function onHeadlineInput(row, textarea) {
+  const isLast = row === headlineList.lastElementChild;
+  if (isLast && textarea.value.trim() && headlineList.children.length < MAX_HEADLINES) {
+    addHeadlineRow();
+  }
+  updateButtons();
+}
+function removeHeadlineRow(row) {
+  if (headlineList.children.length <= 1) return; // минимум 1 поле всегда остаётся
+  row.remove();
+  Array.from(headlineList.children).forEach((r, i) => {
+    r.querySelector('textarea').placeholder = `Заголовок ${i + 1}`;
+  });
+  updateHeadlineChrome();
+  updateButtons();
+}
+function updateHeadlineChrome() {
+  const rows = Array.from(headlineList.children);
+  rows.forEach(r => { r.querySelector('.headline-del').style.visibility = rows.length === 1 ? 'hidden' : 'visible'; });
+  const filled = getHeadlines().length;
+  headlineCount.textContent = `${filled} заполнено${rows.length >= MAX_HEADLINES ? ' — максимум' : ''}`;
+}
+function getHeadlines() {
+  return Array.from(headlineList.querySelectorAll('.headline-input')).map(t => t.value.trim()).filter(Boolean);
+}
+addHeadlineRow();
+
+// ── Шаг 2: креативы (до 3) ──
 function setupDrop(zone, input, onFiles) {
   zone.addEventListener('click', () => input.click());
   input.addEventListener('change', () => { if (input.files.length) { onFiles(input.files); input.value = ''; } });
@@ -347,112 +346,53 @@ function setupDrop(zone, input, onFiles) {
     if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
   });
 }
-
-// ── Шаг 1: наш креатив (upload -> preview -> auto vision-extraction) ──
-async function setOurCreative(file) {
-  ourCreativeFile = file;
-  ourPreview.style.display = 'flex';
-  ourPreviewImg.src = URL.createObjectURL(file);
-  extractedTextWrap.style.display = 'block';
-  extractedText.value = '';
-  ourSpinner.style.display = 'flex';
-  extractStatus.textContent = 'Извлекаю текст…';
-  extractStatus.style.color = 'var(--text-muted)';
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch('api/extract-text', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Extraction failed');
-    const data = await res.json();
-    extractedText.value = data.text || '';
-    extractStatus.textContent = data.text ? 'Текст извлечён — можешь поправить вручную.' : 'Текст не найден — впиши вручную.';
-  } catch (e) {
-    extractStatus.textContent = 'Ошибка извлечения: ' + e.message + ' — впиши текст вручную.';
-    extractStatus.style.color = '#ef4444';
-  } finally {
-    ourSpinner.style.display = 'none';
-    updateButtons();
-  }
-}
-setupDrop(ourDropzone, ourInput, files => setOurCreative(files[0]));
-
-// ── Шаг 2: референсы конкурентов (до 10) ──
 function renderRefGrid() {
-  refCount.textContent = `${references.length} / ${MAX_REFS}`;
-  if (!references.length) {
-    refGrid.innerHTML = '<div class="ref-none" style="grid-column:1/-1">Пока нет референсов.</div>';
+  refCount.textContent = `${creatives.length} / ${MAX_CREATIVES}`;
+  refDropzone.classList.toggle('disabled', creatives.length >= MAX_CREATIVES);
+  if (!creatives.length) {
+    refGrid.innerHTML = '<div class="ref-none">Пока нет креативов.</div>';
   } else {
-    refGrid.innerHTML = references.map(r => `
+    refGrid.innerHTML = creatives.map(r => `
       <div class="ref-item" data-id="${r.id}">
         <img src="${r.blobUrl}" loading="lazy">
+        <span class="fname">${esc(r.name)}</span>
         <button class="del" data-id="${r.id}">✕</button>
       </div>
     `).join('');
     refGrid.querySelectorAll('.del').forEach(btn => {
-      btn.addEventListener('click', () => removeReference(btn.dataset.id));
+      btn.addEventListener('click', () => removeCreative(btn.dataset.id));
     });
   }
   updateButtons();
 }
-function addReferences(files) {
+function addCreatives(files) {
   const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
   for (const f of imgFiles) {
-    if (references.length >= MAX_REFS) break;
-    references.push({ id: uid(), file: f, blobUrl: URL.createObjectURL(f), name: f.name });
+    if (creatives.length >= MAX_CREATIVES) break;
+    creatives.push({ id: uid(), file: f, blobUrl: URL.createObjectURL(f), name: f.name });
   }
   renderRefGrid();
 }
-function removeReference(id) {
-  const idx = references.findIndex(r => r.id === id);
-  if (idx >= 0) { URL.revokeObjectURL(references[idx].blobUrl); references.splice(idx, 1); }
+function removeCreative(id) {
+  const idx = creatives.findIndex(r => r.id === id);
+  if (idx >= 0) { URL.revokeObjectURL(creatives[idx].blobUrl); creatives.splice(idx, 1); }
   renderRefGrid();
 }
-setupDrop(refDropzone, refInput, addReferences);
+setupDrop(refDropzone, refInput, addCreatives);
 renderRefGrid();
-
-// ── Шаг 3: модель ──
-async function loadModels() {
-  const res = await fetch('api/generation-models');
-  const models = await res.json();
-  const DESCR = {
-    'nano-banana-2': 'Быстро, хорошо держит стиль и текст.',
-    'nano-banana-pro': 'Более точная передача деталей референса, дороже/медленнее.',
-    'gpt-image-2': 'Сильная фотореалистичность, медленнее остальных.',
-  };
-  modelList.innerHTML = models.map((m, i) => `
-    <label class="model-opt${i === 0 ? ' active' : ''}" data-id="${m.id}">
-      <input type="radio" name="gen-model" value="${m.id}" ${i === 0 ? 'checked' : ''}>
-      <div>
-        <div class="model-name">${esc(m.name)}</div>
-        <div class="model-desc">${esc(DESCR[m.id] || '')}</div>
-      </div>
-    </label>
-  `).join('');
-  selectedModel = models[0]?.id || null;
-  modelList.querySelectorAll('.model-opt').forEach(el => {
-    el.addEventListener('click', () => {
-      selectedModel = el.dataset.id;
-      modelList.querySelectorAll('.model-opt').forEach(o => o.classList.remove('active'));
-      el.classList.add('active');
-      el.querySelector('input').checked = true;
-    });
-  });
-}
-loadModels();
 
 // ── Кнопки ──
 function updateButtons() {
-  const hasText = extractedText.value.trim().length > 0;
-  btnRun.disabled = !hasText || references.length === 0;
+  updateHeadlineChrome();
+  btnRun.disabled = getHeadlines().length === 0 || creatives.length === 0;
   btnDownload.disabled = outputFiles.length === 0;
   btnSendToNH.disabled = outputFiles.length === 0;
 }
-extractedText.addEventListener('input', updateButtons);
 updateButtons();
 
-// Генерация (особенно GPT Image 2) может занимать 2-3 минуты — бэкенд запускает её фоновой
-// job'ой и сразу отдаёт job_id, чтобы ни один отдельный HTTP-запрос не висел так долго (иначе
-// Cloudflare Tunnel обрывает запрос на ~100с и подсовывает свою HTML-страницу вместо JSON).
+// Генерация может занимать 2-3 минуты — бэкенд запускает её фоновой job'ой и сразу отдаёт
+// job_id, чтобы ни один отдельный HTTP-запрос не висел так долго (иначе Cloudflare Tunnel
+// обрывает запрос на ~100с и подсовывает свою HTML-страницу вместо JSON).
 async function pollJob(jobId, { intervalMs = 2000 } = {}) {
   for (;;) {
     await new Promise(r => setTimeout(r, intervalMs));
@@ -466,16 +406,18 @@ async function pollJob(jobId, { intervalMs = 2000 } = {}) {
   }
 }
 
-// ── RUN: один референс = один запрос на генерацию ──
+// ── RUN: каждый заголовок x каждый креатив = отдельный запрос на генерацию ──
 btnRun.addEventListener('click', async () => {
-  const text = extractedText.value.trim();
-  if (!text || !references.length) return;
+  const headlines = getHeadlines();
+  if (!headlines.length || !creatives.length) return;
   btnRun.disabled = true;
   btnDownload.disabled = true;
   outputFiles = [];
   renderOutputFiles();
 
-  const totalSteps = references.length;
+  const pairs = [];
+  headlines.forEach((text, hIdx) => creatives.forEach((cr, cIdx) => pairs.push({ text, hIdx, cr, cIdx })));
+  const totalSteps = pairs.length;
   let currentStep = 0;
   function updateProgress(msg, stepDone) {
     if (stepDone !== undefined) currentStep = stepDone;
@@ -489,14 +431,13 @@ btnRun.addEventListener('click', async () => {
   }
 
   let failCount = 0;
-  for (let i = 0; i < references.length; i++) {
-    const ref = references[i];
-    updateProgress(`Generating ${i + 1}/${references.length}: ${ref.name}`, i);
+  for (let i = 0; i < pairs.length; i++) {
+    const { text, hIdx, cr, cIdx } = pairs[i];
+    updateProgress(`Generating ${i + 1}/${pairs.length}: заголовок ${hIdx + 1} × ${cr.name}`, i);
     try {
       const fd = new FormData();
       fd.append('text', text);
-      fd.append('model', selectedModel);
-      fd.append('file', ref.file);
+      fd.append('file', cr.file);
       const startRes = await fetch('api/generate', { method: 'POST', body: fd });
       if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
       const { job_id } = await startRes.json();
@@ -506,21 +447,18 @@ btnRun.addEventListener('click', async () => {
       const blobUrl = URL.createObjectURL(blob);
       outputFiles.push({
         id: uid(),
-        name: `${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
+        name: `h${hIdx + 1}-${cr.name.replace(/\.[^.]+$/, '')}-headline.png`,
         blob, blobUrl, type: 'image',
-        savezoneUrl: data.savezone_url, // pre-outpaint 3:4 — reused by "перегенерировать аутпеинт"
-        outpainting: false,
       });
       renderOutputFiles();
     } catch (e) {
-      console.error('generate failed for', ref.name, e);
+      console.error('generate failed for', text, cr.name, e);
       failCount++;
     }
     currentStep = i + 1;
   }
 
-  const donePct = 100;
-  globalProgressBar.style.width = donePct + '%';
+  globalProgressBar.style.width = '100%';
   if (failCount === 0) {
     globalProgressBar.className = 'progress-bar done';
     runProgress.className = 'status-bar';
@@ -534,26 +472,16 @@ btnRun.addEventListener('click', async () => {
   updateButtons();
 });
 
-// ── Output / Preview (та же логика, что и в audiopng, только всегда картинки) ──
+// ── Output / Preview ──
 function renderOutputFiles() {
   fileList.innerHTML = outputFiles.map((f, i) => `
-    <div class="file-item${f.outpainting ? ' processing' : ''}" data-idx="${i}">
+    <div class="file-item" data-idx="${i}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span class="file-item-name">${f.outpainting ? 'Перегенерирую аутпеинт…' : esc(f.name)}</span>
-      <button class="file-item-retry" data-idx="${i}" title="Перегенерировать только аутпеинт" ${f.outpainting ? 'disabled' : ''}>↻</button>
+      <span class="file-item-name">${esc(f.name)}</span>
     </div>
   `).join('');
   fileList.querySelectorAll('.file-item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.file-item-retry')) return;
-      previewOutput(+el.dataset.idx);
-    });
-  });
-  fileList.querySelectorAll('.file-item-retry').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      retryOutpaint(+btn.dataset.idx);
-    });
+    el.addEventListener('click', () => previewOutput(+el.dataset.idx));
   });
   if (outputFiles.length === 0) {
     placeholder.style.display = 'flex';
@@ -570,35 +498,6 @@ function previewOutput(idx) {
   imagePreview.src = outputFiles[idx].blobUrl;
 }
 
-// Перегенерировать ТОЛЬКО аутпеинт для одной уже готовой картинки — переиспользует
-// сохранённый pre-outpaint savezone_url, платная генерация моделью не повторяется.
-async function retryOutpaint(idx) {
-  const entry = outputFiles[idx];
-  if (!entry || !entry.savezoneUrl || entry.outpainting) return;
-  entry.outpainting = true;
-  renderOutputFiles();
-  try {
-    const savezoneRes = await fetch(entry.savezoneUrl);
-    const savezoneBlob = await savezoneRes.blob();
-    const fd = new FormData();
-    fd.append('file', new File([savezoneBlob], 'savezone.png', { type: 'image/png' }));
-    const res = await fetch('api/outpaint-only', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Outpaint retry failed');
-    const data = await res.json();
-    const imgRes = await fetch(data.url);
-    const blob = await imgRes.blob();
-    URL.revokeObjectURL(entry.blobUrl);
-    entry.blob = blob;
-    entry.blobUrl = URL.createObjectURL(blob);
-  } catch (e) {
-    console.error('retry outpaint failed', e);
-    alert('Не удалось перегенерировать аутпеинт: ' + e.message);
-  } finally {
-    entry.outpainting = false;
-    renderOutputFiles();
-  }
-}
-
 btnDownload.addEventListener('click', async () => {
   if (!outputFiles.length) return;
   const zip = new JSZip();
@@ -607,14 +506,14 @@ btnDownload.addEventListener('click', async () => {
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `competitors-static-pack-${Date.now()}.zip`;
+  a.download = `headline-pack-${Date.now()}.zip`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 });
 
-// Отправляет все сгенерированные 9:16 картинки в AudioPng -> Upload 9:16, через общий
+// Отправляет все сгенерированные картинки в AudioPng -> Upload 9:16, через общий
 // IndexedDB-"ящик" (scripts/shared/handoff.js) — audiopng сам их забирает на своей стороне
 // и прогоняет через тот же addImages(), что и обычная ручная загрузка.
 btnSendToNH.addEventListener('click', async () => {

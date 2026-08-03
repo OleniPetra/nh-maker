@@ -63,6 +63,13 @@ COMPETITORS_DIR = PROJECT_ROOT / "competitors"
 sys.path.insert(0, str(COMPETITORS_DIR))
 import api as competitors  # noqa: E402
 
+# headline/headline_api.py — deliberately NOT named api.py (see its own docstring): that name
+# is already taken in sys.modules by competitors/api.py above, and a second `import api as ...`
+# would silently return the cached competitors module instead of loading this one.
+HEADLINE_DIR = PROJECT_ROOT / "headline"
+sys.path.insert(0, str(HEADLINE_DIR))
+import headline_api as headline  # noqa: E402
+
 IMAGES_DIR = PROJECT_ROOT / "Input" / "images"
 CSV_PATH = PROJECT_ROOT / "Input" / "creatives.csv"
 DB_PATH = PROJECT_ROOT / "db" / "creatives.db"
@@ -530,6 +537,10 @@ app.mount("/audiopng", StaticFiles(directory=str(audiopng.STATIC), html=True), n
 # ---------- Competitors Static (смонтировано под /competitors) ----------
 app.include_router(competitors.router)
 app.mount("/competitors", StaticFiles(directory=str(competitors.STATIC), html=True), name="competitors_static")
+
+# ---------- Headline (смонтировано под /headline) ----------
+app.include_router(headline.router)
+app.mount("/headline", StaticFiles(directory=str(headline.STATIC), html=True), name="headline_static")
 
 # Общий сайдбар (scripts/shared/sidebar.js) — единственный источник правды для
 # навигации, подключается и review_ui.html, и audiopng/static/index.html по
