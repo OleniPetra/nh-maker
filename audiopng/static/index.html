@@ -898,11 +898,10 @@ body {
           <option value="auto" selected>Auto</option>
           <option value="9:16">9:16</option>
           <option value="16:9">16:9</option>
+          <option value="1.91:1">1.91:1</option>
           <option value="1:1">1:1</option>
-          <option value="5:4">5:4</option>
           <option value="4:5">4:5</option>
           <option value="3:4">3:4</option>
-          <option value="4:3">4:3</option>
         </select>
       </div>
       <button type="button" class="mode-toggle-btn" data-mode="upload34">🖼️ Upload 3:4</button>
@@ -1240,10 +1239,9 @@ const UPLOAD_RATIOS = {
   '9:16': { w: 1080, h: 1920 },
   '16:9': { w: 1920, h: 1080 },
   '1:1':  { w: 1080, h: 1080 },
-  '5:4':  { w: 1350, h: 1080 },
+  '1.91:1': { w: 2063, h: 1080 },
   '4:5':  { w: 1080, h: 1350 },
   '3:4':  { w: 1080, h: 1440 },
-  '4:3':  { w: 1440, h: 1080 },
 };
 let selectedUploadRatio = 'auto';
 

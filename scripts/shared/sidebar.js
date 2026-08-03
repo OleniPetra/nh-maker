@@ -53,7 +53,14 @@
     ".sidebar button { width: 44px; height: 44px; border-radius: 14px; border: none; background: transparent;" +
     "  color: #A79E8E; display: flex; align-items: center; justify-content: center; cursor: pointer; }" +
     ".sidebar button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; }" +
-    ".sidebar button.active { background: #F0B429; color: #221E17; }";
+    ".sidebar button.active { background: #F0B429; color: #221E17; }" +
+    ".sidebar .sc-spacer { flex: 1 1 auto; }" +
+    ".sidebar .sc-dash-nav { display: none; flex-direction: column; gap: 10px; }" +
+    ".sidebar .sc-dash-nav.open { display: flex; }" +
+    ".sidebar .sc-dash-toggle { width: 44px; height: 28px; color: #A79E8E; }" +
+    ".sidebar .sc-dash-toggle svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2;" +
+    "  transition: transform .15s ease; }" +
+    ".sidebar .sc-dash-toggle.open svg { transform: rotate(180deg); }";
 
   function injectCss() {
     var style = document.createElement("style");
@@ -101,13 +108,23 @@
     }
   }
 
+  // Стрелка "вверх" — панель с dashboard-вкладками разворачивается снизу вверх,
+  // поэтому в закрытом состоянии стрелка смотрит вверх (раскрыть), а в открытом
+  // разворачивается на 180° (свернуть). См. .sc-dash-toggle.open в CSS выше.
+  var TOGGLE_ICON = '<svg viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>';
+
   function build() {
     var root = document.getElementById("sc-sidebar-root");
     if (!root) return;
 
     var aside = document.createElement("aside");
     aside.className = "sidebar";
-    aside.innerHTML = '<button class="logo-btn" id="sc-logo">✺</button><nav id="sc-nav"></nav>';
+    aside.innerHTML =
+      '<button class="logo-btn" id="sc-logo">✺</button>' +
+      '<nav id="sc-nav-external"></nav>' +
+      '<div class="sc-spacer"></div>' +
+      '<nav id="sc-nav-dash" class="sc-dash-nav"></nav>' +
+      '<button class="sc-dash-toggle" id="sc-dash-toggle" title="Показать/скрыть разделы">' + TOGGLE_ICON + '</button>';
     root.appendChild(aside);
 
     var logoBtn = aside.querySelector("#sc-logo");
@@ -115,7 +132,8 @@
     if (onAudiopng()) logoBtn.classList.add("active");
     logoBtn.onclick = goToAudiopng;
 
-    var nav = aside.querySelector("#sc-nav");
+    var externalNav = aside.querySelector("#sc-nav-external");
+    var dashNav = aside.querySelector("#sc-nav-dash");
     var active = currentPageId();
     ITEMS.forEach(function (item) {
       var b = document.createElement("button");
@@ -125,8 +143,15 @@
       var isActive = item.external ? onExternalItem(item) : item.id === active;
       if (isActive) b.classList.add("active");
       b.onclick = function () { navigate(item); };
-      nav.appendChild(b);
+      (item.external ? externalNav : dashNav).appendChild(b);
     });
+
+    // По умолчанию список dashboard-вкладок скрыт (см. CSS .sc-dash-nav без .open).
+    var toggleBtn = aside.querySelector("#sc-dash-toggle");
+    toggleBtn.onclick = function () {
+      dashNav.classList.toggle("open");
+      toggleBtn.classList.toggle("open");
+    };
   }
 
   injectCss();
