@@ -131,6 +131,18 @@ body {
 .dropzone.disabled { opacity: 0.45; pointer-events: none; }
 
 /* ── Col 1: динамический список заголовков ── */
+.headline-mode-toggle {
+  display: flex; gap: 4px; margin: 0 12px 10px; padding: 3px; background: var(--bg-subtle);
+  border-radius: var(--radius-md); border: 1px solid var(--border-color);
+}
+.hmt-btn {
+  flex: 1; font-family: inherit; font-size: 0.72rem; font-weight: 600; padding: 6px 8px;
+  border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s ease;
+}
+.hmt-btn:hover { color: var(--text-primary); }
+.hmt-btn.active { background: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+
 .headline-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .headline-row { display: flex; align-items: flex-start; gap: 6px; }
 .headline-input {
@@ -146,6 +158,14 @@ body {
 }
 .headline-del:hover { background: var(--accent-red); color: #fff; }
 .headline-count { padding: 0 12px 10px; font-size: 0.68rem; color: var(--text-muted); }
+
+/* Список-режим: одно поле на всю оставшуюся высоту колонки, одна строка = один заголовок */
+.headline-list-textarea {
+  flex: 1; min-height: 280px; margin: 0 12px 10px; font-family: inherit; font-size: 0.82rem;
+  color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); padding: 10px; resize: none; outline: none; line-height: 1.6;
+}
+.headline-list-textarea:focus { border-color: var(--accent-blue); }
 
 /* ── Col 2: до 3 креативов ── */
 .ref-grid { flex: 1; padding: 0 12px 12px; margin-top: -2px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
@@ -235,8 +255,13 @@ body {
   <!-- COL 1: Заголовки -->
   <div class="column">
     <div class="col-header"><div><span class="col-step">1</span>Заголовки</div></div>
-    <div class="col-sub">Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу.</div>
+    <div class="col-sub" id="headlineModeHint">Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.</div>
+    <div class="headline-mode-toggle" id="headlineModeToggle">
+      <button type="button" class="hmt-btn active" data-mode="fields">Растущие поля</button>
+      <button type="button" class="hmt-btn" data-mode="list">Список строк</button>
+    </div>
     <div class="headline-list" id="headlineList"></div>
+    <textarea class="headline-list-textarea" id="headlineListText" style="display:none" placeholder="Один заголовок на строку…&#10;learn AI with [Claude]&#10;save 20% today"></textarea>
     <div class="headline-count" id="headlineCount"></div>
   </div>
 
@@ -286,6 +311,7 @@ function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 const headlineList = $('headlineList'), headlineCount = $('headlineCount');
+const headlineModeToggle = $('headlineModeToggle'), headlineListText = $('headlineListText'), headlineModeHint = $('headlineModeHint');
 const refDropzone = $('refDropzone'), refInput = $('refInput'), refGrid = $('refGrid'), refCount = $('refCount');
 const btnRun = $('btnRun'), btnDownload = $('btnDownload'), btnSendToNH = $('btnSendToNH');
 const runProgress = $('runProgress');
@@ -300,7 +326,31 @@ let creatives = []; // { id, file, blobUrl, name }
 // after the source fields have changed or the creative was removed from column 2.
 let outputFiles = [];
 
-// ── Шаг 1: заголовки — растущий список, до MAX_HEADLINES ──
+// ── Шаг 1: заголовки — два режима ──
+// "fields" — растущий список отдельных полей (см. addHeadlineRow ниже): поле добавляется само,
+// когда заполняется последнее, до MAX_HEADLINES.
+// "list" — одно большое поле на всю высоту колонки, одна строка = один заголовок; удобно, когда
+// заголовки уже готовы списком (например, скопированы откуда-то) и не нужно расставлять их по
+// отдельным полям вручную.
+let headlineMode = 'fields';
+const HEADLINE_MODE_HINTS = {
+  fields: 'Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
+  list: 'Один заголовок на строку, до 20 строк. Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
+};
+headlineModeToggle.querySelectorAll('.hmt-btn').forEach(btn => {
+  btn.addEventListener('click', () => setHeadlineMode(btn.dataset.mode));
+});
+function setHeadlineMode(mode) {
+  if (mode === headlineMode) return;
+  headlineMode = mode;
+  headlineModeToggle.querySelectorAll('.hmt-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  headlineList.style.display = mode === 'fields' ? 'flex' : 'none';
+  headlineListText.style.display = mode === 'list' ? 'block' : 'none';
+  headlineModeHint.textContent = HEADLINE_MODE_HINTS[mode];
+  updateButtons();
+}
+headlineListText.addEventListener('input', updateButtons);
+
 // Поле только ДОБАВЛЯЕТСЯ, когда заполняется последнее — никогда не удаляется само по себе
 // (чтобы не терять фокус/текст при вводе); удалить лишнее можно вручную кнопкой "✕".
 function addHeadlineRow() {
@@ -335,12 +385,23 @@ function removeHeadlineRow(row) {
   updateButtons();
 }
 function updateHeadlineChrome() {
-  const rows = Array.from(headlineList.children);
-  rows.forEach(r => { r.querySelector('.headline-del').style.visibility = rows.length === 1 ? 'hidden' : 'visible'; });
-  const filled = getHeadlines().length;
-  headlineCount.textContent = `${filled} заполнено${rows.length >= MAX_HEADLINES ? ' — максимум' : ''}`;
+  if (headlineMode === 'fields') {
+    const rows = Array.from(headlineList.children);
+    rows.forEach(r => { r.querySelector('.headline-del').style.visibility = rows.length === 1 ? 'hidden' : 'visible'; });
+    const filled = getHeadlines().length;
+    headlineCount.textContent = `${filled} заполнено${rows.length >= MAX_HEADLINES ? ' — максимум' : ''}`;
+  } else {
+    const lineCount = headlineListText.value.split('\n').filter(s => s.trim()).length;
+    const filled = getHeadlines().length;
+    headlineCount.textContent = lineCount > MAX_HEADLINES
+      ? `${filled} заполнено — максимум ${MAX_HEADLINES}, лишние строки не учитываются`
+      : `${filled} заполнено`;
+  }
 }
 function getHeadlines() {
+  if (headlineMode === 'list') {
+    return headlineListText.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, MAX_HEADLINES);
+  }
   return Array.from(headlineList.querySelectorAll('.headline-input')).map(t => t.value.trim()).filter(Boolean);
 }
 addHeadlineRow();

@@ -13,6 +13,7 @@ audiopng/server.py — тут тот же самый класс бага, тол
 Переиспользует FAL-инфраструктуру из audiopng/server.py (upload в FAL Storage, общий
 job-store для фоновых генераций) — как и competitors/api.py.
 """
+import re
 from pathlib import Path
 
 import httpx
@@ -48,12 +49,41 @@ HEADLINE_PROMPT_TEMPLATE = (
     "as in the original — only the headline text changes."
 )
 
+# "learn AI with [Claude]" -> displayed text has the brackets stripped, and the bracketed word(s)
+# get called out separately for the model to color-highlight — same rule for both frontend input
+# modes (growing fields / one-headline-per-line list), since this is parsed on the backend from
+# the raw headline text either mode ultimately sends.
+BRACKET_RE = re.compile(r"\[([^\[\]]+)\]")
+
+def _process_bracket_highlight(text: str) -> tuple[str, str]:
+    """Returns (display_text_with_brackets_stripped, extra_prompt_instruction_or_empty)."""
+    matches = BRACKET_RE.findall(text)
+    display_text = BRACKET_RE.sub(lambda m: m.group(1), text)
+    if not matches:
+        return display_text, ""
+    # Deliberately never says the word "bracket" — an earlier version told the model to drop the
+    # brackets, and it rendered them anyway (same class of bug as Flux Fill reacting badly to
+    # negation, documented elsewhere in this codebase: mentioning a symbol at all, even to say
+    # "don't draw it", makes the model draw it). Describing the plain colored-word outcome
+    # directly, with no mention of brackets in either direction, produces a clean result instead.
+    quoted = ", ".join(f"\"{m}\"" for m in matches)
+    instruction = (
+        f"\n\nWithin that headline text, the word(s) {quoted} are shown in a bold, vivid accent "
+        "color with strong contrast against both the background and the rest of the headline's "
+        "own color (a saturated hue such as bright orange, yellow, or a bold color already "
+        "present elsewhere in the creative), drawing the viewer's eye to just that word — plain "
+        "text, no surrounding punctuation or symbols added around it. The rest of the headline "
+        "keeps the original design's normal headline color."
+    )
+    return display_text, instruction
+
 async def _do_generate(text: str, ref_bytes: bytes, ref_content_type: str, ref_filename: str) -> dict:
     """The actual (slow) work — see audiopng._start_async_job for why this runs in the background
     instead of directly in the request handler."""
     async with httpx.AsyncClient(timeout=280) as client:
         ref_url = await audiopng._fal_storage_upload(client, ref_bytes, ref_content_type, ref_filename)
-        prompt = HEADLINE_PROMPT_TEMPLATE.format(text=text.strip())
+        display_text, highlight_instruction = _process_bracket_highlight(text.strip())
+        prompt = HEADLINE_PROMPT_TEMPLATE.format(text=display_text) + highlight_instruction
         payload = {"prompt": prompt, "image_urls": [ref_url], **GEN_PAYLOAD_EXTRA}
         resp = await client.post(EDIT_URL, json=payload, headers={"Authorization": f"Key {audiopng.FAL_KEY}"})
         if resp.status_code != 200:
