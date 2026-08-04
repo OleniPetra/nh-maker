@@ -167,7 +167,7 @@ body {
 }
 .headline-list-textarea:focus { border-color: var(--accent-blue); }
 
-/* ── Col 2: до 3 креативов ── */
+/* ── Col 2: креативы ── */
 .ref-grid { flex: 1; padding: 0 12px 12px; margin-top: -2px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
 .ref-item {
   position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);
@@ -255,7 +255,7 @@ body {
   <!-- COL 1: Заголовки -->
   <div class="column">
     <div class="col-header"><div><span class="col-step">1</span>Заголовки</div></div>
-    <div class="col-sub" id="headlineModeHint">Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.</div>
+    <div class="col-sub" id="headlineModeHint">Впиши текст в первое поле — как только оно заполнено, появится следующее. Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.</div>
     <div class="headline-mode-toggle" id="headlineModeToggle">
       <button type="button" class="hmt-btn active" data-mode="fields">Растущие поля</button>
       <button type="button" class="hmt-btn" data-mode="list">Список строк</button>
@@ -269,12 +269,12 @@ body {
   <div class="column">
     <div class="col-header">
       <div><span class="col-step">2</span>Креативы</div>
-      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 / 3</span>
+      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 creatives</span>
     </div>
-    <div class="col-sub">До 3 статичных рекламных креативов (headline/body/CTA). nano-banana-2 сама определит заголовок на картинке и заменит его — остальное не трогается.</div>
+    <div class="col-sub">Статичные рекламные креативы (headline/body/CTA). nano-banana-2 сама определит заголовок на картинке и заменит его — остальное не трогается.</div>
     <div class="dropzone" id="refDropzone">
       <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span>Drop creatives here<br><span style="color:var(--text-muted);font-size:0.7rem">up to 3</span></span>
+      <span>Drop creatives here</span>
       <input type="file" id="refInput" accept="image/*" multiple>
     </div>
     <div class="ref-grid" id="refGrid"></div>
@@ -318,8 +318,10 @@ const runProgress = $('runProgress');
 const globalProgressWrap = $('globalProgressWrap'), globalProgressBar = $('globalProgressBar');
 const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList = $('fileList');
 
-const MAX_HEADLINES = 20;
-const MAX_CREATIVES = 3;
+// Formal caps only (prevent unbounded memory use / an unbounded batch) — deliberately not
+// surfaced anywhere in the UI text, so they don't read as meaningful product limits.
+const MAX_HEADLINES = 50;
+const MAX_CREATIVES = 50;
 let creatives = []; // { id, file, blobUrl, name }
 // { id, name, text, file, status: 'generating'|'done'|'error', blob, blobUrl, errorMsg } — keeps
 // text+file per entry (not just an index into headlines/creatives) so a retry still works even
@@ -334,8 +336,8 @@ let outputFiles = [];
 // отдельным полям вручную.
 let headlineMode = 'fields';
 const HEADLINE_MODE_HINTS = {
-  fields: 'Впиши текст в первое поле — как только оно заполнено, появится следующее (до 20). Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
-  list: 'Один заголовок на строку, до 20 строк. Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
+  fields: 'Впиши текст в первое поле — как только оно заполнено, появится следующее. Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
+  list: 'Один заголовок на строку. Каждый заголовок будет применён к каждому загруженному креативу. Слово в [квадратных скобках] будет выделено акцентным цветом.',
 };
 headlineModeToggle.querySelectorAll('.hmt-btn').forEach(btn => {
   btn.addEventListener('click', () => setHeadlineMode(btn.dataset.mode));
@@ -388,14 +390,9 @@ function updateHeadlineChrome() {
   if (headlineMode === 'fields') {
     const rows = Array.from(headlineList.children);
     rows.forEach(r => { r.querySelector('.headline-del').style.visibility = rows.length === 1 ? 'hidden' : 'visible'; });
-    const filled = getHeadlines().length;
-    headlineCount.textContent = `${filled} заполнено${rows.length >= MAX_HEADLINES ? ' — максимум' : ''}`;
+    headlineCount.textContent = `${getHeadlines().length} заполнено`;
   } else {
-    const lineCount = headlineListText.value.split('\n').filter(s => s.trim()).length;
-    const filled = getHeadlines().length;
-    headlineCount.textContent = lineCount > MAX_HEADLINES
-      ? `${filled} заполнено — максимум ${MAX_HEADLINES}, лишние строки не учитываются`
-      : `${filled} заполнено`;
+    headlineCount.textContent = `${getHeadlines().length} заполнено`;
   }
 }
 function getHeadlines() {
@@ -406,7 +403,7 @@ function getHeadlines() {
 }
 addHeadlineRow();
 
-// ── Шаг 2: креативы (до 3) ──
+// ── Шаг 2: креативы ──
 function setupDrop(zone, input, onFiles) {
   zone.addEventListener('click', () => input.click());
   input.addEventListener('change', () => { if (input.files.length) { onFiles(input.files); input.value = ''; } });
@@ -419,7 +416,7 @@ function setupDrop(zone, input, onFiles) {
   });
 }
 function renderRefGrid() {
-  refCount.textContent = `${creatives.length} / ${MAX_CREATIVES}`;
+  refCount.textContent = `${creatives.length} creative${creatives.length === 1 ? '' : 's'}`;
   refDropzone.classList.toggle('disabled', creatives.length >= MAX_CREATIVES);
   if (!creatives.length) {
     refGrid.innerHTML = '<div class="ref-none">Пока нет креативов.</div>';

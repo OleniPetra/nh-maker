@@ -1209,7 +1209,7 @@ function fitBox(targetW, targetH, maxW, maxH) {
 
 // Formal cap only (prevents unbounded memory use from a runaway drop) — deliberately not
 // surfaced anywhere in the UI text, so it doesn't read as a meaningful product limit.
-const MAX_IMAGES = 100;
+const MAX_IMAGES = 50;
 
 // ── local state ─────────────────────────────────────────────
 let images = [];        // { id, name, file, blobUrl, logoYSlider, logoScale, discYSlider, discScale }

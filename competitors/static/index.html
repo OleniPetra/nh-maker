@@ -273,12 +273,12 @@ body {
   <div class="column">
     <div class="col-header">
       <div><span class="col-step">2</span>Референсы конкурентов</div>
-      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 / 10</span>
+      <span id="refCount" style="font-size:0.68rem;color:var(--text-muted);font-weight:500">0 references</span>
     </div>
-    <div class="col-sub">До 10 картинок — стиль/расположение элементов каждого референса используется отдельно. Каждый референс = отдельная генерация.</div>
+    <div class="col-sub">Стиль/расположение элементов каждого референса используется отдельно. Каждый референс = отдельная генерация.</div>
     <div class="dropzone" id="refDropzone">
       <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span>Drop reference images here<br><span style="color:var(--text-muted);font-size:0.7rem">up to 10</span></span>
+      <span>Drop reference images here</span>
       <input type="file" id="refInput" accept="image/*" multiple>
     </div>
     <div class="ref-grid" id="refGrid"></div>
@@ -330,7 +330,9 @@ const runProgress = $('runProgress');
 const globalProgressWrap = $('globalProgressWrap'), globalProgressBar = $('globalProgressBar');
 const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList = $('fileList');
 
-const MAX_REFS = 10;
+// Formal cap only (prevents unbounded memory use from a runaway drop) — deliberately not
+// surfaced anywhere in the UI text, so it doesn't read as a meaningful product limit.
+const MAX_REFS = 50;
 let ourCreativeFile = null;
 let references = []; // { id, file, blobUrl, name }
 let selectedModel = null;
@@ -376,9 +378,9 @@ async function setOurCreative(file) {
 }
 setupDrop(ourDropzone, ourInput, files => setOurCreative(files[0]));
 
-// ── Шаг 2: референсы конкурентов (до 10) ──
+// ── Шаг 2: референсы конкурентов ──
 function renderRefGrid() {
-  refCount.textContent = `${references.length} / ${MAX_REFS}`;
+  refCount.textContent = `${references.length} reference${references.length === 1 ? '' : 's'}`;
   if (!references.length) {
     refGrid.innerHTML = '<div class="ref-none" style="grid-column:1/-1">Пока нет референсов.</div>';
   } else {
