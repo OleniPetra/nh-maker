@@ -108,18 +108,18 @@ body {
   overflow-y: hidden;
 }
 
-/* Наведение на колонку слегка её расширяет (как в референсе). Ширины заданы в fr, поэтому
-   сумма треков не меняется — соседи просто ужимаются, горизонтальный скролл не дёргается.
-   Переход навешен на сам grid-template-columns: значения интерполируемы (одинаковое число
-   треков, все в fr). */
-.container { transition: grid-template-columns var(--t-slow); }
+/* Расширение колонки по наведению — ОТКЛЮЧЕНО: на рабочем экране раскладка ехала
+   под курсором. Ширины в fr, поэтому сумма треков не менялась и горизонтальный
+   скролл не дёргался — но сам сдвиг мешал. Чтобы вернуть, раскомментируй:
 
-.container:has(.column:nth-child(1):hover) { grid-template-columns: 2.4fr 2fr 1.75fr 1.75fr 1.2fr 2fr; }
-.container:has(.column:nth-child(2):hover) { grid-template-columns: 2fr 2.4fr 1.75fr 1.75fr 1.2fr 2fr; }
-.container:has(.column:nth-child(3):hover) { grid-template-columns: 2fr 2fr 2.1fr 1.75fr 1.2fr 2fr; }
-.container:has(.column:nth-child(4):hover) { grid-template-columns: 2fr 2fr 1.75fr 2.1fr 1.2fr 2fr; }
-.container:has(.column:nth-child(5):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.44fr 2fr; }
-.container:has(.column:nth-child(6):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.2fr 2.4fr; }
+   .container { transition: grid-template-columns var(--t-slow); }
+   .container:has(.column:nth-child(1):hover) { grid-template-columns: 2.4fr 2fr 1.75fr 1.75fr 1.2fr 2fr; }
+   .container:has(.column:nth-child(2):hover) { grid-template-columns: 2fr 2.4fr 1.75fr 1.75fr 1.2fr 2fr; }
+   .container:has(.column:nth-child(3):hover) { grid-template-columns: 2fr 2fr 2.1fr 1.75fr 1.2fr 2fr; }
+   .container:has(.column:nth-child(4):hover) { grid-template-columns: 2fr 2fr 1.75fr 2.1fr 1.2fr 2fr; }
+   .container:has(.column:nth-child(5):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.44fr 2fr; }
+   .container:has(.column:nth-child(6):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.2fr 2.4fr; }
+*/
 
 
 /* Column */

@@ -64,16 +64,16 @@ body {
   overflow-y: hidden;
 }
 
-/* Наведение на колонку слегка её расширяет (как в референсе). Ширины заданы в fr, поэтому
-   сумма треков не меняется — соседи просто ужимаются, горизонтальный скролл не дёргается.
-   Переход навешен на сам grid-template-columns: значения интерполируемы (одинаковое число
-   треков, все в fr). */
-.container { transition: grid-template-columns var(--t-slow); }
+/* Расширение колонки по наведению — ОТКЛЮЧЕНО: на рабочем экране раскладка ехала
+   под курсором. Ширины в fr, поэтому сумма треков не менялась и горизонтальный
+   скролл не дёргался — но сам сдвиг мешал. Чтобы вернуть, раскомментируй:
 
-.container:has(.column:nth-child(1):hover) { grid-template-columns: 1.92fr 1.6fr 1.1fr 1.7fr; }
-.container:has(.column:nth-child(2):hover) { grid-template-columns: 1.6fr 1.92fr 1.1fr 1.7fr; }
-.container:has(.column:nth-child(3):hover) { grid-template-columns: 1.6fr 1.6fr 1.32fr 1.7fr; }
-.container:has(.column:nth-child(4):hover) { grid-template-columns: 1.6fr 1.6fr 1.1fr 2.04fr; }
+   .container { transition: grid-template-columns var(--t-slow); }
+   .container:has(.column:nth-child(1):hover) { grid-template-columns: 1.92fr 1.6fr 1.1fr 1.7fr; }
+   .container:has(.column:nth-child(2):hover) { grid-template-columns: 1.6fr 1.92fr 1.1fr 1.7fr; }
+   .container:has(.column:nth-child(3):hover) { grid-template-columns: 1.6fr 1.6fr 1.32fr 1.7fr; }
+   .container:has(.column:nth-child(4):hover) { grid-template-columns: 1.6fr 1.6fr 1.1fr 2.04fr; }
+*/
 
 
 .column {
@@ -127,34 +127,49 @@ body {
 .dropzone input[type=file] { display: none; }
 .dropzone-icon { width: 22px; height: 22px; stroke: currentColor; opacity: 0.7; }
 
-.our-creative-preview {
-  margin: 0 auto 12px; border-radius: var(--radius-md); overflow: hidden;
-  border: 1px solid var(--border-color); position: relative; background: var(--bg-subtle);
-  aspect-ratio: 9 / 16; max-width: 170px; width: 100%; display: flex; align-items: center; justify-content: center;
+/* Колонка 1 — список исходных креативов, у каждого свой извлечённый текст. */
+.src-list { flex: 1; padding: 0 12px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.src-item {
+  position: relative; display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-md);
+  background: var(--bg-surface); border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);
+  animation: sc-fade-up 0.35s ease both;
 }
-.our-creative-preview img { width: 100%; height: 100%; object-fit: contain; }
-.our-creative-preview .spinner-overlay {
+.src-item:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
+.src-thumb {
+  position: relative; width: 74px; height: 132px; flex-shrink: 0; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-subtle);
+}
+.src-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.src-thumb .spinner-overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   background: rgba(0,0,0,0.35);
 }
+.src-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.src-name {
+  font-family: var(--font-sans); font-size: 0.68rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 22px;
+}
+.src-item textarea {
+  width: 100%; flex: 1; min-height: 96px; font-family: var(--font-sans); font-size: 0.75rem;
+  color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); padding: 7px; resize: vertical; outline: none; line-height: 1.45;
+}
+.src-item textarea:focus { border-color: var(--accent); }
+.src-hint { font-size: 0.65rem; color: var(--text-muted); line-height: 1.35; }
+.src-hint.error { color: var(--accent-red); }
+.src-item .del {
+  position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border-color); background: rgba(255,255,255,0.92); color: var(--text-secondary);
+  cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.src-item .del:hover { background: var(--accent-red); border-color: var(--accent-red); color: #fff; }
+.src-none { padding: 20px 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
 .sc-spinner {
   width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.35); border-top-color: #fff;
   border-radius: 50%; animation: sc-spin 0.8s linear infinite;
 }
 @keyframes sc-spin { to { transform: rotate(360deg); } }
-
-.extracted-text-wrap { margin: 0 12px 12px; }
-.extracted-text-wrap label {
-  display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
-}
-.extracted-text-wrap textarea {
-  width: 100%; min-height: 320px; font-family: var(--font-sans); font-size: 0.8rem; color: var(--text-primary);
-  background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-  padding: 8px; resize: vertical; outline: none; line-height: 1.5;
-}
-.extracted-text-wrap textarea:focus { border-color: var(--accent); }
-.extracted-text-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
 
 .ref-grid { flex: 1; padding: 0 12px 12px; margin-top: -2px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
 .ref-item {
@@ -260,22 +275,17 @@ body {
 
   <!-- COL 1: Наш креатив -->
   <div class="column">
-    <div class="col-header"><div><span class="col-step">1</span>Наш креатив</div></div>
-    <div class="col-sub">Загрузи картинку с текстом — vision-модель вытащит только текст, остальное (стиль, картинка) не используется.</div>
+    <div class="col-header">
+      <div><span class="col-step">1</span>Наш креатив</div>
+      <span id="srcCount">0 sources</span>
+    </div>
+    <div class="col-sub">Загрузи одну или несколько картинок с текстом — из каждой vision-модель вытащит только текст, остальное (стиль, картинка) не используется. Каждый текст будет применён к каждому референсу.</div>
     <div class="dropzone" id="ourDropzone">
       <span class="dropzone-icon-wrap"><svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-      <span>Drop image here<br><span style="color:var(--text-muted);font-size:0.7rem">PNG, JPG, WebP</span></span>
-      <input type="file" id="ourInput" accept="image/*">
+      <span>Drop images here<br><span style="color:var(--text-muted);font-size:0.7rem">PNG, JPG, WebP</span></span>
+      <input type="file" id="ourInput" accept="image/*" multiple>
     </div>
-    <div class="our-creative-preview" id="ourPreview" style="display:none">
-      <img id="ourPreviewImg" alt="">
-      <div class="spinner-overlay" id="ourSpinner" style="display:none"><div class="sc-spinner"></div></div>
-    </div>
-    <div class="extracted-text-wrap" id="extractedTextWrap" style="display:none">
-      <label>Извлечённый текст (можно поправить)</label>
-      <textarea id="extractedText" placeholder="Текст появится здесь после извлечения…"></textarea>
-      <div class="extracted-text-hint" id="extractStatus"></div>
-    </div>
+    <div class="src-list" id="srcList"></div>
   </div>
 
   <!-- COL 2: Референсы от конкурентов -->
@@ -331,8 +341,7 @@ function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 const ourDropzone = $('ourDropzone'), ourInput = $('ourInput');
-const ourPreview = $('ourPreview'), ourPreviewImg = $('ourPreviewImg'), ourSpinner = $('ourSpinner');
-const extractedTextWrap = $('extractedTextWrap'), extractedText = $('extractedText'), extractStatus = $('extractStatus');
+const srcList = $('srcList'), srcCount = $('srcCount');
 const refDropzone = $('refDropzone'), refInput = $('refInput'), refGrid = $('refGrid'), refCount = $('refCount');
 const modelList = $('modelList');
 const btnRun = $('btnRun'), btnDownload = $('btnDownload'), btnSendToNH = $('btnSendToNH');
@@ -343,7 +352,9 @@ const placeholder = $('placeholder'), imagePreview = $('imagePreview'), fileList
 // Formal cap only (prevents unbounded memory use from a runaway drop) — deliberately not
 // surfaced anywhere in the UI text, so it doesn't read as a meaningful product limit.
 const MAX_REFS = 50;
-let ourCreativeFile = null;
+// Исходные креативы: из каждого vision-модель вытаскивает свой текст.
+// { id, file, blobUrl, name, text, status: 'extracting'|'done'|'error', hint }
+let sources = [];
 let references = []; // { id, file, blobUrl, name }
 let selectedModel = null;
 let outputFiles = []; // { name, blob, blobUrl, type: 'image' }
@@ -364,33 +375,90 @@ function setupDrop(zone, input, onFiles) {
   });
 }
 
-// ── Шаг 1: наш креатив (upload -> preview -> auto vision-extraction) ──
-async function setOurCreative(file) {
-  ourCreativeFile = file;
-  ourPreview.style.display = 'flex';
-  ourPreviewImg.src = URL.createObjectURL(file);
-  extractedTextWrap.style.display = 'block';
-  extractedText.value = '';
-  ourSpinner.style.display = 'flex';
-  extractStatus.textContent = 'Извлекаю текст…';
-  extractStatus.style.color = 'var(--text-muted)';
+// ── Шаг 1: исходные креативы (upload -> vision-extraction по каждому) ──
+function renderSources() {
+  srcCount.textContent = `${sources.length} source${sources.length === 1 ? '' : 's'}`;
+  if (!sources.length) {
+    srcList.innerHTML = '<div class="src-none">Пока нет исходных креативов.</div>';
+  } else {
+    srcList.innerHTML = sources.map(sc => `
+      <div class="src-item" data-id="${sc.id}">
+        <div class="src-thumb">
+          <img src="${sc.blobUrl}" loading="lazy">
+          ${sc.status === 'extracting' ? '<div class="spinner-overlay"><div class="sc-spinner"></div></div>' : ''}
+        </div>
+        <div class="src-body">
+          <div class="src-name" title="${esc(sc.name)}">${esc(sc.name)}</div>
+          <textarea data-id="${sc.id}" placeholder="Текст появится здесь после извлечения…">${esc(sc.text || '')}</textarea>
+          <div class="src-hint${sc.status === 'error' ? ' error' : ''}">${esc(sc.hint || '')}</div>
+        </div>
+        <button class="del" data-id="${sc.id}" title="Убрать">✕</button>
+      </div>
+    `).join('');
+    srcList.querySelectorAll('textarea').forEach(t => {
+      t.addEventListener('input', () => {
+        const sc = sources.find(x => x.id === t.dataset.id);
+        if (sc) sc.text = t.value;
+        updateButtons();
+        persist();
+      });
+    });
+    srcList.querySelectorAll('.del').forEach(b => {
+      b.addEventListener('click', () => removeSource(b.dataset.id));
+    });
+  }
+  updateButtons();
+  persist();
+}
+
+function removeSource(id) {
+  const i = sources.findIndex(s => s.id === id);
+  if (i >= 0) { URL.revokeObjectURL(sources[i].blobUrl); sources.splice(i, 1); }
+  renderSources();
+}
+
+// Извлечение идёт последовательно, по одной картинке: это N обращений к vision-модели,
+// и параллельный залп упирался бы в лимиты OpenRouter при пачке в десяток файлов.
+async function extractFor(sc) {
+  sc.status = 'extracting';
+  sc.hint = 'Извлекаю текст…';
+  renderSources();
   try {
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('file', sc.file);
     const res = await fetch('api/extract-text', { method: 'POST', body: fd });
     if (!res.ok) throw new Error((await res.json()).detail || 'Extraction failed');
     const data = await res.json();
-    extractedText.value = data.text || '';
-    extractStatus.textContent = data.text ? 'Текст извлечён — можешь поправить вручную.' : 'Текст не найден — впиши вручную.';
+    sc.text = data.text || '';
+    sc.status = 'done';
+    sc.hint = data.text ? 'Текст извлечён — можно поправить.' : 'Текст не найден — впиши вручную.';
   } catch (e) {
-    extractStatus.textContent = 'Ошибка извлечения: ' + e.message + ' — впиши текст вручную.';
-    extractStatus.style.color = 'var(--accent-red)';
-  } finally {
-    ourSpinner.style.display = 'none';
-    updateButtons();
+    // Провайдер отдаёт многострочный JSON со всей цепочкой фолбэков — в карточку он не
+    // влезает и читать его там невозможно. Показываем короткую суть, полный текст — в консоль.
+    console.error('extract-text failed for', sc.name, e);
+    const short = /Could not process image/i.test(e.message)
+      ? 'модель не смогла прочитать эту картинку'
+      : e.message.replace(/\s+/g, ' ').slice(0, 90) + (e.message.length > 90 ? '…' : '');
+    sc.status = 'error';
+    sc.hint = 'Не удалось извлечь текст (' + short + ') — впиши вручную.';
   }
+  renderSources();
 }
-setupDrop(ourDropzone, ourInput, files => setOurCreative(files[0]));
+
+async function addSources(files) {
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  const added = [];
+  for (const f of imgFiles) {
+    const sc = { id: uid(), file: f, blobUrl: URL.createObjectURL(f), name: f.name,
+                 text: '', status: 'extracting', hint: 'В очереди на извлечение…' };
+    sources.push(sc);
+    added.push(sc);
+  }
+  renderSources();
+  for (const sc of added) await extractFor(sc);
+}
+setupDrop(ourDropzone, ourInput, addSources);
+renderSources();
 
 // ── Шаг 2: референсы конкурентов ──
 function renderRefGrid() {
@@ -459,13 +527,14 @@ async function loadModels() {
 const modelsReady = loadModels();
 
 // ── Кнопки ──
+function textSources() {
+  return sources.filter(s => (s.text || '').trim());
+}
 function updateButtons() {
-  const hasText = extractedText.value.trim().length > 0;
-  btnRun.disabled = !hasText || references.length === 0;
+  btnRun.disabled = textSources().length === 0 || references.length === 0;
   btnDownload.disabled = outputFiles.length === 0;
   btnSendToNH.disabled = outputFiles.length === 0;
 }
-extractedText.addEventListener('input', updateButtons);
 updateButtons();
 
 // Генерация (особенно GPT Image 2) может занимать 2-3 минуты — бэкенд запускает её фоновой
@@ -484,16 +553,18 @@ async function pollJob(jobId, { intervalMs = 2000 } = {}) {
   }
 }
 
-// ── RUN: один референс = один запрос на генерацию ──
+// ── RUN: каждый исходный текст x каждый референс = отдельная генерация ──
 btnRun.addEventListener('click', async () => {
-  const text = extractedText.value.trim();
-  if (!text || !references.length) return;
+  const srcs = textSources();
+  if (!srcs.length || !references.length) return;
   btnRun.disabled = true;
   btnDownload.disabled = true;
   outputFiles = [];
   renderOutputFiles();
 
-  const totalSteps = references.length;
+  const pairs = [];
+  srcs.forEach((sc, si) => references.forEach(ref => pairs.push({ sc, si, ref })));
+  const totalSteps = pairs.length;
   let currentStep = 0;
   function updateProgress(msg, stepDone) {
     if (stepDone !== undefined) currentStep = stepDone;
@@ -507,12 +578,12 @@ btnRun.addEventListener('click', async () => {
   }
 
   let failCount = 0;
-  for (let i = 0; i < references.length; i++) {
-    const ref = references[i];
-    updateProgress(`Generating ${i + 1}/${references.length}: ${ref.name}`, i);
+  for (let i = 0; i < pairs.length; i++) {
+    const { sc, si, ref } = pairs[i];
+    updateProgress(`Generating ${i + 1}/${pairs.length}: текст ${si + 1} × ${ref.name}`, i);
     try {
       const fd = new FormData();
-      fd.append('text', text);
+      fd.append('text', sc.text.trim());
       fd.append('model', selectedModel);
       fd.append('file', ref.file);
       const startRes = await fetch('api/generate', { method: 'POST', body: fd });
@@ -524,7 +595,9 @@ btnRun.addEventListener('click', async () => {
       const blobUrl = URL.createObjectURL(blob);
       outputFiles.push({
         id: uid(),
-        name: `${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
+        // В имя добавлен номер исходного текста — иначе при нескольких источниках
+        // файлы по одному и тому же референсу назывались бы одинаково.
+        name: `s${si + 1}-${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
         blob, blobUrl, type: 'image',
         savezoneUrl: data.savezone_url, // pre-outpaint 3:4 — reused by "перегенерировать аутпеинт"
         outpainting: false,
@@ -656,9 +729,15 @@ btnSendToNH.addEventListener('click', async () => {
 // blobUrl не сохраняем — после перезагрузки они протухают, создаются заново из File.
 function collectState() {
   return {
-    v: 1,
-    ourCreativeFile,
-    extractedText: extractedText.value,
+    v: 2,
+    // Незавершённое извлечение не сохраняем как 'extracting': после перезагрузки запрос
+    // уже не продолжится, и карточка висела бы со спиннером. Помечаем как готовую —
+    // текст всегда можно дописать руками или удалить карточку и загрузить заново.
+    sources: sources.map(s => ({
+      name: s.name, file: s.file, text: s.text,
+      status: s.status === 'extracting' ? 'done' : s.status,
+      hint: s.status === 'extracting' ? 'Извлечение прервано — впиши текст вручную.' : s.hint,
+    })),
     references: references.map(r => ({ name: r.name, file: r.file })),
     selectedModel,
     outputs: outputFiles.map(f => ({ name: f.name, blob: f.blob, savezoneUrl: f.savezoneUrl })),
@@ -667,13 +746,11 @@ function collectState() {
 
 async function restoreState(st) {
   if (!st) return;
-  if (st.ourCreativeFile) {
-    ourCreativeFile = st.ourCreativeFile;
-    ourPreview.style.display = 'flex';
-    ourPreviewImg.src = URL.createObjectURL(st.ourCreativeFile);
-    extractedTextWrap.style.display = 'block';
-  }
-  if (st.extractedText) extractedText.value = st.extractedText;
+  (st.sources || []).forEach(sc => {
+    sources.push({ id: uid(), file: sc.file, blobUrl: URL.createObjectURL(sc.file),
+                   name: sc.name, text: sc.text || '', status: sc.status || 'done', hint: sc.hint || '' });
+  });
+  renderSources();
   (st.references || []).forEach(r => {
     references.push({ id: uid(), file: r.file, blobUrl: URL.createObjectURL(r.file), name: r.name });
   });

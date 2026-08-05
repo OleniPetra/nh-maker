@@ -64,15 +64,15 @@ body {
   overflow-y: hidden;
 }
 
-/* Наведение на колонку слегка её расширяет (как в референсе). Ширины заданы в fr, поэтому
-   сумма треков не меняется — соседи просто ужимаются, горизонтальный скролл не дёргается.
-   Переход навешен на сам grid-template-columns: значения интерполируемы (одинаковое число
-   треков, все в fr). */
-.container { transition: grid-template-columns var(--t-slow); }
+/* Расширение колонки по наведению — ОТКЛЮЧЕНО: на рабочем экране раскладка ехала
+   под курсором. Ширины в fr, поэтому сумма треков не менялась и горизонтальный
+   скролл не дёргался — но сам сдвиг мешал. Чтобы вернуть, раскомментируй:
 
-.container:has(.column:nth-child(1):hover) { grid-template-columns: 1.68fr 1.3fr 1.9fr; }
-.container:has(.column:nth-child(2):hover) { grid-template-columns: 1.4fr 1.56fr 1.9fr; }
-.container:has(.column:nth-child(3):hover) { grid-template-columns: 1.4fr 1.3fr 2.28fr; }
+   .container { transition: grid-template-columns var(--t-slow); }
+   .container:has(.column:nth-child(1):hover) { grid-template-columns: 1.68fr 1.3fr 1.9fr; }
+   .container:has(.column:nth-child(2):hover) { grid-template-columns: 1.4fr 1.56fr 1.9fr; }
+   .container:has(.column:nth-child(3):hover) { grid-template-columns: 1.4fr 1.3fr 2.28fr; }
+*/
 
 
 .column {
