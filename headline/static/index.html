@@ -246,6 +246,7 @@ body {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Download Pack
     </button>
+    <span id="resetSlot"></span>
   </div>
 </div>
 
@@ -308,6 +309,7 @@ body {
 
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
+<script src="/static-shared/session.js?v=1"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -331,6 +333,10 @@ let creatives = []; // { id, file, blobUrl, name }
 // after the source fields have changed or the creative was removed from column 2.
 let outputFiles = [];
 
+// Сессия создаётся в конце файла; persist() вызывается из функций выше — отсюда переменная.
+let sessionRef = null;
+function persist() { if (sessionRef) sessionRef.schedule(); }
+
 // ── Шаг 1: заголовки — два режима ──
 // "fields" — растущий список отдельных полей (см. addHeadlineRow ниже): поле добавляется само,
 // когда заполняется последнее, до MAX_HEADLINES.
@@ -347,6 +353,7 @@ headlineModeToggle.querySelectorAll('.hmt-btn').forEach(btn => {
 });
 function setHeadlineMode(mode) {
   if (mode === headlineMode) return;
+  persist();
   headlineMode = mode;
   headlineModeToggle.querySelectorAll('.hmt-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   headlineList.style.display = mode === 'fields' ? 'flex' : 'none';
@@ -436,6 +443,7 @@ function renderRefGrid() {
     });
   }
   updateButtons();
+  persist();
 }
 function addCreatives(files) {
   const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
@@ -592,6 +600,7 @@ function renderOutputFiles() {
       retryOne(+btn.dataset.idx);
     });
   });
+  persist();
   const doneIdxs = outputFiles.map((f, i) => f.status === 'done' ? i : -1).filter(i => i >= 0);
   if (!doneIdxs.length) {
     placeholder.style.display = 'flex';
@@ -646,6 +655,57 @@ btnSendToNH.addEventListener('click', async () => {
     btnSendToNH.innerHTML = prevLabel;
   }
 });
+
+// ── Сохранение сессии ───────────────────────────────────────
+// blobUrl не сохраняем — после перезагрузки они протухают, создаются заново из File/Blob.
+function collectState() {
+  return {
+    v: 1,
+    headlineMode,
+    fields: [...headlineList.querySelectorAll('.headline-input')].map(t => t.value),
+    listText: headlineListText.value,
+    creatives: creatives.map(c => ({ name: c.name, file: c.file })),
+    // Незавершённые генерации не сохраняем: их job на сервере после перезагрузки уже
+    // не отследить, карточка осталась бы висеть в статусе «Генерирую…» навсегда.
+    outputs: outputFiles.filter(f => f.status === 'done' || f.status === 'error').map(f => ({
+      name: f.name, text: f.text, file: f.file, status: f.status, blob: f.blob, errorMsg: f.errorMsg,
+    })),
+  };
+}
+
+async function restoreState(st) {
+  if (!st) return;
+  if (st.headlineMode && st.headlineMode !== headlineMode) setHeadlineMode(st.headlineMode);
+  if (st.listText) headlineListText.value = st.listText;
+
+  // Поля-заголовки: первое уже создано на старте, остальные добавляем под сохранённые значения.
+  // В сохранённом наборе последнее поле обычно уже пустое (его добавил onHeadlineInput), так что
+  // отдельно дописываем пустую строку только если сохранили список без неё.
+  (st.fields || []).forEach((v, i) => {
+    while (headlineList.children.length <= i) addHeadlineRow();
+    headlineList.children[i].querySelector('.headline-input').value = v;
+  });
+  const lastField = headlineList.lastElementChild?.querySelector('.headline-input');
+  if (lastField && lastField.value.trim() && headlineList.children.length < MAX_HEADLINES) addHeadlineRow();
+
+  (st.creatives || []).forEach(c => {
+    creatives.push({ id: uid(), file: c.file, blobUrl: URL.createObjectURL(c.file), name: c.name });
+  });
+  renderRefGrid();
+
+  if (st.outputs && st.outputs.length) {
+    outputFiles = st.outputs.map(f => ({
+      id: uid(), name: f.name, text: f.text, file: f.file, status: f.status,
+      blob: f.blob, blobUrl: f.blob ? URL.createObjectURL(f.blob) : null, errorMsg: f.errorMsg,
+    }));
+    renderOutputFiles();
+  }
+  updateButtons();
+}
+
+sessionRef = NHSession.attach('headline', collectState, restoreState);
+document.getElementById('resetSlot').appendChild(NHSession.resetButton(sessionRef));
+['input', 'change'].forEach(ev => document.addEventListener(ev, persist, true));
 </script>
 </body>
 </html>

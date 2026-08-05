@@ -248,6 +248,7 @@ body {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Download Pack
     </button>
+    <span id="resetSlot"></span>
   </div>
 </div>
 
@@ -323,6 +324,7 @@ body {
 
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
+<script src="/static-shared/session.js?v=1"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -345,6 +347,10 @@ let ourCreativeFile = null;
 let references = []; // { id, file, blobUrl, name }
 let selectedModel = null;
 let outputFiles = []; // { name, blob, blobUrl, type: 'image' }
+
+// Сессия создаётся в конце файла; persist() вызывается из функций выше — отсюда переменная.
+let sessionRef = null;
+function persist() { if (sessionRef) sessionRef.schedule(); }
 
 function setupDrop(zone, input, onFiles) {
   zone.addEventListener('click', () => input.click());
@@ -403,6 +409,7 @@ function renderRefGrid() {
     });
   }
   updateButtons();
+  persist();
 }
 function addReferences(files) {
   const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
@@ -445,10 +452,11 @@ async function loadModels() {
       modelList.querySelectorAll('.model-opt').forEach(o => o.classList.remove('active'));
       el.classList.add('active');
       el.querySelector('input').checked = true;
+      persist();
     });
   });
 }
-loadModels();
+const modelsReady = loadModels();
 
 // ── Кнопки ──
 function updateButtons() {
@@ -571,6 +579,7 @@ function renderOutputFiles() {
   } else {
     previewOutput(outputFiles.length - 1);
   }
+  persist();
 }
 function previewOutput(idx) {
   document.querySelectorAll('.file-item').forEach(e => e.classList.remove('active'));
@@ -642,6 +651,57 @@ btnSendToNH.addEventListener('click', async () => {
     btnSendToNH.innerHTML = prevLabel;
   }
 });
+
+// ── Сохранение сессии ───────────────────────────────────────
+// blobUrl не сохраняем — после перезагрузки они протухают, создаются заново из File.
+function collectState() {
+  return {
+    v: 1,
+    ourCreativeFile,
+    extractedText: extractedText.value,
+    references: references.map(r => ({ name: r.name, file: r.file })),
+    selectedModel,
+    outputs: outputFiles.map(f => ({ name: f.name, blob: f.blob, savezoneUrl: f.savezoneUrl })),
+  };
+}
+
+async function restoreState(st) {
+  if (!st) return;
+  if (st.ourCreativeFile) {
+    ourCreativeFile = st.ourCreativeFile;
+    ourPreview.style.display = 'flex';
+    ourPreviewImg.src = URL.createObjectURL(st.ourCreativeFile);
+    extractedTextWrap.style.display = 'block';
+  }
+  if (st.extractedText) extractedText.value = st.extractedText;
+  (st.references || []).forEach(r => {
+    references.push({ id: uid(), file: r.file, blobUrl: URL.createObjectURL(r.file), name: r.name });
+  });
+  renderRefGrid();
+  if (st.outputs && st.outputs.length) {
+    outputFiles = st.outputs.map(f => ({
+      id: uid(), name: f.name, blob: f.blob, blobUrl: URL.createObjectURL(f.blob),
+      type: 'image', savezoneUrl: f.savezoneUrl, outpainting: false,
+    }));
+    renderOutputFiles();
+  }
+  // Модель выбираем после того, как список моделей отрисован loadModels().
+  await modelsReady;
+  if (st.selectedModel) {
+    const el = modelList.querySelector(`.model-opt[data-id="${st.selectedModel}"]`);
+    if (el) {
+      selectedModel = st.selectedModel;
+      modelList.querySelectorAll('.model-opt').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+      el.querySelector('input').checked = true;
+    }
+  }
+  updateButtons();
+}
+
+sessionRef = NHSession.attach('competitors', collectState, restoreState);
+document.getElementById('resetSlot').appendChild(NHSession.resetButton(sessionRef));
+['input', 'change'].forEach(ev => document.addEventListener(ev, persist, true));
 </script>
 </body>
 </html>

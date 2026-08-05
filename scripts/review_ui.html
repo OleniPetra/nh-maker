@@ -156,6 +156,7 @@
         <div class="sub" id="pageSub">Input/images/ + creatives.csv + creatives.db — всё в одной таблице</div>
       </div>
       <span class="balance-pill" id="balance">баланс: ...</span>
+      <span id="resetSlot"></span>
     </header>
 
     <main>
@@ -224,6 +225,7 @@
 
 <script src="/static-shared/sidebar.js?v=6"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
+<script src="/static-shared/session.js?v=1"></script>
 <script>
 const BRANCHES = ['certif', 'claude', 'aigen'];
 const PAGES = ['creatives', 'generate', 'history'];
@@ -402,6 +404,11 @@ function renderBrief(brief) {
 }
 
 // ---------- Creatives (Review + Database merged) ----------
+// Правки таблицы, ещё не отправленные на сервер (score/branch/note по ключу строки).
+// Храним ОТДЕЛЬНО от rows: сами строки приходят с сервера и при перезагрузке приедут
+// заново, а вот набранная руками заметка иначе просто пропала бы.
+let pendingEdits = {};
+
 const Creatives = (() => {
   let rows = [];
   let sortKey = 'status', sortDir = 1;
@@ -417,10 +424,19 @@ const Creatives = (() => {
     setStatus('Загрузка...', false);
     const [tableRes, statsRes] = await Promise.all([fetch('/api/table'), fetch('/api/db/summary')]);
     rows = await tableRes.json();
+    // Накатываем несохранённые правки поверх свежих серверных данных.
+    let restored = 0;
+    rows.forEach(r => {
+      const e = pendingEdits[r.key];
+      if (!e) return;
+      Object.assign(r, e);
+      restored++;
+    });
     renderStats(await statsRes.json());
     render();
     const pending = rows.filter(r => r.status === 'new').length;
-    setStatus(`Всего: ${rows.length}, требуют занесения в базу: ${pending}`, false);
+    if (restored) setStatus(`Есть несохранённые изменения (${restored})`, true);
+    else setStatus(`Всего: ${rows.length}, требуют занесения в базу: ${pending}`, false);
   }
 
   function renderStats(summary) {
@@ -494,11 +510,15 @@ const Creatives = (() => {
     rows.find(r => r.key === key).score = score;
     btn.parentElement.querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    (pendingEdits[key] = pendingEdits[key] || {}).score = score;
     setStatus('Есть несохранённые изменения', true);
+    persist();
   }
   function setField(key, field, value) {
     rows.find(r => r.key === key)[field] = value;
+    (pendingEdits[key] = pendingEdits[key] || {})[field] = value;
     setStatus('Есть несохранённые изменения', true);
+    persist();
   }
 
   async function saveAll() {
@@ -506,6 +526,8 @@ const Creatives = (() => {
     const payload = rows.filter(r => r.status !== 'csv_orphan').map(r => ({filename: r.filename, score: r.score, note: r.note, branch: r.branch}));
     const res = await fetch('/api/save', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({rows: payload})});
     if (!res.ok) { setStatus('Ошибка сохранения', true); return; }
+    pendingEdits = {};   // уехали на сервер — держать их локально больше незачем
+    persist();
     await load();
   }
 
@@ -537,6 +559,11 @@ const Creatives = (() => {
   return {load, sortBy, setScore, setField, saveAll, deleteRow, runIngest, enlarge};
 })();
 
+// Последний сгенерированный бриф — дорогой вызов LLM, терять его при обновлении обидно.
+let lastBrief = null;
+let sessionRef = null;
+function persist() { if (sessionRef) sessionRef.schedule(); }
+
 // ---------- Generate ----------
 const Generate = (() => {
   let initialized = false;
@@ -563,7 +590,9 @@ const Generate = (() => {
       buttons.forEach(b => b.disabled = false);
       loadBalance();
       if (job.error) { document.getElementById('genResult').innerHTML = `<p style="color:var(--accent-red)">${escapeHtml(job.error)}</p>`; return; }
-      document.getElementById('genResult').innerHTML = renderBrief(job.result.brief);
+      lastBrief = job.result.brief;
+      document.getElementById('genResult').innerHTML = renderBrief(lastBrief);
+      persist();
     });
   }
   return {init, run};
@@ -616,6 +645,42 @@ const History = (() => {
 })();
 
 showPage(PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'creatives');
+
+// ── Сохранение сессии ───────────────────────────────────────
+// Таблица креативов и история приезжают с сервера — их не дублируем. Храним только то,
+// что живёт исключительно в браузере: несохранённые правки и форму генерации.
+function collectState() {
+  return {
+    v: 1,
+    pendingEdits,
+    genBranch: document.getElementById('genBranch').value,
+    genHint: document.getElementById('genHint').value,
+    genIncludeHistory: document.getElementById('genIncludeHistory').checked,
+    lastBrief,
+  };
+}
+
+async function restoreState(st) {
+  if (!st) return;
+  if (st.pendingEdits) pendingEdits = st.pendingEdits;
+  if (st.genHint) document.getElementById('genHint').value = st.genHint;
+  if (typeof st.genIncludeHistory === 'boolean') document.getElementById('genIncludeHistory').checked = st.genIncludeHistory;
+  if (st.genBranch) {
+    Generate.init();   // наполняет список веток, иначе выбирать не из чего
+    const sel = document.getElementById('genBranch');
+    if ([...sel.options].some(o => o.value === st.genBranch)) sel.value = st.genBranch;
+  }
+  if (st.lastBrief) {
+    lastBrief = st.lastBrief;
+    document.getElementById('genResult').innerHTML = renderBrief(lastBrief);
+  }
+  // Таблица уже могла отрисоваться до восстановления — перечитываем, чтобы правки наложились.
+  if (Object.keys(pendingEdits).length && location.hash.slice(1) !== 'generate') Creatives.load();
+}
+
+sessionRef = NHSession.attach('dashboard', collectState, restoreState);
+document.getElementById('resetSlot').appendChild(NHSession.resetButton(sessionRef));
+['input', 'change'].forEach(ev => document.addEventListener(ev, persist, true));
 </script>
 </body>
 </html>

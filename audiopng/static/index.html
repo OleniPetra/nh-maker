@@ -889,6 +889,7 @@ body {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Download Pack
     </button>
+    <span id="resetSlot"></span>
   </div>
 </div>
 
@@ -1061,6 +1062,7 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@4.1.0/build/mp4-muxer.js"></script>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
+<script src="/static-shared/session.js?v=1"></script>
 <script>
 // ── ffmpeg.wasm setup (safe-init: UI works even if CDN fails) ─
 const FFmpegW = typeof FFmpegWASM !== 'undefined' ? FFmpegWASM : null;
@@ -1206,6 +1208,11 @@ let musicFile = null;
 let voiceVolume = 100;
 let musicVolume = 100;
 let outputFiles = [];   // { name, blob, blobUrl }
+
+// Сессия создаётся в конце файла (ей нужны уже объявленные функции сбора/восстановления),
+// а вызывается persist() из функций выше — поэтому через переменную, а не напрямую.
+let sessionRef = null;
+function persist() { if (sessionRef) sessionRef.schedule(); }
 
 // Two independent overlay slots — templates are split by filename ("LOGO" -> logo, everything
 // else -> disclaimer). Each slot keeps its own selection, grouped templates and resolved blobs/bitmaps.
@@ -1427,6 +1434,7 @@ function renderImages() {
   updateButtons();
   renderOverlayAdjustList('logo');
   renderOverlayAdjustList('disclaimer');
+  persist();
 }
 setupDrop(imgDropzone, imgInput, addImagesWithRatio);
 
@@ -1596,6 +1604,7 @@ async function selectTemplate(slot, id) {
   }
   renderTemplateList(slot);
   renderOverlayAdjustList(slot);
+  persist();
 }
 
 async function refreshTemplates() {
@@ -1825,6 +1834,7 @@ function renderOverlayAdjustList(slot) {
         const badge = document.getElementById(`toneBadge-${slot}-${idx}`);
         if (badge) badge.textContent = toneBadgeText(slot, img);
         redraw();
+        persist();
       });
     }
 
@@ -2364,6 +2374,7 @@ function renderOutputFiles() {
   } else {
     previewOutput(0);
   }
+  persist();
 }
 
 function previewOutput(idx) {
@@ -2443,10 +2454,84 @@ async function importHandoffPrompt() {
   }
 }
 
+// ── Сохранение сессии ───────────────────────────────────────
+// Кладём в кэш только то, что нельзя дёшево пересчитать: сами файлы и пользовательский ввод.
+// blobUrl не сохраняем — они живут только в рамках документа и после перезагрузки протухают,
+// поэтому создаются заново из File при восстановлении.
+function collectState() {
+  return {
+    v: 1,
+    mode: imgModeValue,
+    ratio: selectedUploadRatio,
+    // Карточки «в процессе» не сохраняем: их сетевая операция после перезагрузки уже не
+    // возобновится, и они зависли бы вечным спиннером.
+    images: images.filter(i => i.status === 'ready' && i.file).map(i => ({
+      name: i.name, file: i.file, size: i.size,
+      targetW: i.targetW, targetH: i.targetH,
+      logoYSlider: i.logoYSlider, logoScale: i.logoScale,
+      discYSlider: i.discYSlider, discScale: i.discScale,
+      overlayTone: i.overlayTone, overlayBrightness: i.overlayBrightness,
+      logoToneOverride: i.logoToneOverride, discToneOverride: i.discToneOverride,
+      retryKind: i.retryKind, retrySourceUrl: i.retrySourceUrl, retrySourceFile: i.retrySourceFile,
+    })),
+    logoTpl: overlayState.logo.selectedTemplateId,
+    discTpl: overlayState.disclaimer.selectedTemplateId,
+    voiceFile, musicFile, voiceVolume, musicVolume,
+    genPrompt: genPrompt.value,
+    genModel: genModel.value,
+    outputs: outputFiles.map(f => ({ name: f.name, blob: f.blob, type: f.type })),
+  };
+}
+
+async function restoreState(st) {
+  if (!st) return;
+  if (st.mode) setImgMode(st.mode);
+  if (st.ratio) { selectedUploadRatio = st.ratio; uploadRatioSelect.value = st.ratio; updateUploadRatioTitle(); }
+
+  (st.images || []).forEach(i => {
+    images.push(Object.assign({}, i, {
+      id: uid(), blobUrl: URL.createObjectURL(i.file), status: 'ready',
+    }));
+  });
+  renderImages();
+
+  if (st.voiceFile) setVoiceFile(st.voiceFile);
+  if (st.musicFile) setMusicFile(st.musicFile);
+  if (typeof st.voiceVolume === 'number') { voiceVolume = st.voiceVolume; voiceVol.value = st.voiceVolume; }
+  if (typeof st.musicVolume === 'number') { musicVolume = st.musicVolume; musicVol.value = st.musicVolume; }
+  if (st.genPrompt) genPrompt.value = st.genPrompt;
+  if (st.genModel && genModel.querySelector(`option[value="${st.genModel}"]`)) genModel.value = st.genModel;
+
+  if (st.outputs && st.outputs.length) {
+    outputFiles = st.outputs.map(f => ({ name: f.name, blob: f.blob, type: f.type, blobUrl: URL.createObjectURL(f.blob) }));
+    renderOutputFiles();
+  }
+
+  // Шаблоны — после refreshTemplates(), иначе списка групп ещё нет и выбор не применится.
+  await templatesReady;
+  if (st.logoTpl) await selectTemplate('logo', st.logoTpl);
+  if (st.discTpl) await selectTemplate('disclaimer', st.discTpl);
+  updateButtons();
+}
+
 // ── Init ────────────────────────────────────────────────────
-refreshTemplates();
-importHandoffImages();
-importHandoffPrompt();
+// Список шаблонов должен быть загружен до восстановления: selectTemplate() ищет выбранную
+// группу в overlayState.templateGroups, который заполняет именно refreshTemplates().
+const templatesReady = refreshTemplates();
+
+sessionRef = NHSession.attach('audiopng', collectState, restoreState);
+document.getElementById('resetSlot').appendChild(NHSession.resetButton(sessionRef));
+
+// Ползунки, громкость, промпт — обычные поля, ловим их скопом. Всё остальное (очередь,
+// выбор шаблона, результаты) дёргает persist() из своих рендер-функций.
+['input', 'change'].forEach(ev => document.addEventListener(ev, persist, true));
+
+// Handoff-импорт — только после восстановления, чтобы переданные картинки легли поверх
+// сохранённой очереди, а не были затёрты ею.
+sessionRef.ready.then(() => {
+  importHandoffImages();
+  importHandoffPrompt();
+});
 </script>
 </body>
 </html>
