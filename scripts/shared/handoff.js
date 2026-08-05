@@ -53,5 +53,23 @@
     return items;
   }
 
-  window.NHHandoff = { stage: stage, consume: consume };
+  // Отдельный, более простой канал для передачи ТЕКСТА (промпт + выбранная модель) — например
+  // кнопкой "Отправить на генерацию" у сгенерированного брифа в dashboard#generate, которая
+  // отправляет промпт в AudioPng -> AI Gen с уже выбранной под него моделью. sessionStorage
+  // вместо IndexedDB: данные — это просто JSON-сериализуемые строки, а не Blob, так что не нужна
+  // ни асинхронность, ни ручная (де)сериализация, которых требует IndexedDB.
+  var PROMPT_KEY = "nh-handoff-pending-prompt";
+
+  function stagePrompt(data) {
+    sessionStorage.setItem(PROMPT_KEY, JSON.stringify(data));
+    return Promise.resolve();
+  }
+
+  function consumePrompt() {
+    var raw = sessionStorage.getItem(PROMPT_KEY);
+    if (raw) sessionStorage.removeItem(PROMPT_KEY);
+    return Promise.resolve(raw ? JSON.parse(raw) : null);
+  }
+
+  window.NHHandoff = { stage: stage, consume: consume, stagePrompt: stagePrompt, consumePrompt: consumePrompt };
 })();

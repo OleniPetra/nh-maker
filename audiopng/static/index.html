@@ -1073,7 +1073,7 @@ body {
 <script src="ffmpeg/index.js?v=3"></script>
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@4.1.0/build/mp4-muxer.js"></script>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
-<script src="/static-shared/handoff.js"></script>
+<script src="/static-shared/handoff.js?v=2"></script>
 <script>
 // ── ffmpeg.wasm setup (safe-init: UI works even if CDN fails) ─
 const FFmpegW = typeof FFmpegWASM !== 'undefined' ? FFmpegWASM : null;
@@ -1179,15 +1179,16 @@ async function getCachedBitmap(file) {
 
 // ── Image mode toggle: Upload 9:16 / Upload 3:4 (auto-outpaint) / AI Generate ─
 let imgModeValue = 'upload916';
+function setImgMode(mode) {
+  imgModeValue = mode;
+  imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  uploadSection.style.display = imgModeValue === 'upload916' ? '' : 'none';
+  upload34Section.style.display = imgModeValue === 'upload34' ? '' : 'none';
+  generateSection.style.display = imgModeValue === 'generate' ? '' : 'none';
+  updateButtons();
+}
 imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    imgModeValue = btn.dataset.mode;
-    imgModeToggle.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
-    uploadSection.style.display = imgModeValue === 'upload916' ? '' : 'none';
-    upload34Section.style.display = imgModeValue === 'upload34' ? '' : 'none';
-    generateSection.style.display = imgModeValue === 'generate' ? '' : 'none';
-    updateButtons();
-  });
+  btn.addEventListener('click', () => setImgMode(btn.dataset.mode));
 });
 
 // Дропдаун соотношения живёт ВНУТРИ таба — клики по нему не должны переключать вкладку
@@ -2432,9 +2433,33 @@ async function importHandoffImages() {
   }
 }
 
+// Подхватывает промпт+модель, переданные кнопкой "Отправить на генерацию" из dashboard#generate
+// (см. scripts/review_ui.html) через тот же общий "ящик" (scripts/shared/handoff.js), только
+// текстовый канал (stagePrompt/consumePrompt, sessionStorage) вместо картиночного. URL вида
+// /audiopng/?importPrompt=1 сигнализирует, что там что-то лежит.
+async function importHandoffPrompt() {
+  if (new URLSearchParams(location.search).get('importPrompt') !== '1' || !window.NHHandoff) return;
+  try {
+    const data = await NHHandoff.consumePrompt();
+    if (data && data.prompt) {
+      setImgMode('generate');
+      genPrompt.value = data.prompt;
+      if (data.model && genModel.querySelector(`option[value="${data.model}"]`)) {
+        genModel.value = data.model;
+      }
+      updateButtons();
+    }
+  } catch (e) {
+    console.error('handoff prompt import failed', e);
+  } finally {
+    history.replaceState(null, '', location.pathname);
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────
 refreshTemplates();
 importHandoffImages();
+importHandoffPrompt();
 </script>
 </body>
 </html>
