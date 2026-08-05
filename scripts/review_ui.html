@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static-shared/theme.css?v=1">
+<link rel="stylesheet" href="/static-shared/theme.css?v=2">
 <style>
   /* Явные color везде — намеренно НЕ используем color-scheme:light dark,
      это и было причиной бага "белый текст на белой кнопке" (нативная тёмная
@@ -50,7 +50,7 @@
   #creativesStatus.dirty { color: var(--accent-amber); font-weight: 600; }
 
   select, textarea, input[type=text] {
-    font: inherit; font-size: 13px; padding: 8px 12px; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); font-size: 13px; padding: 8px 12px; border-radius: var(--radius-sm);
     border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);
     outline: none; transition: border-color var(--t-fast);
   }
@@ -83,14 +83,15 @@
   .branch-score-cell select { padding: 6px 8px; font-size: 12px; width: 100%; }
   .score-row { display: flex; gap: 4px; }
   .score-btn {
-    font: inherit; font-size: 12px; padding: 6px 0; flex: 1; border-radius: 8px; border: 1.5px solid var(--border-color);
+    font-family: var(--font-sans); font-size: 12px; padding: 6px 0; flex: 1; border-radius: 8px; border: 1.5px solid var(--border-color);
     background: var(--bg-surface); color: var(--text-muted); cursor: pointer;
   }
   .score-btn[data-score="1"].active { background: var(--accent-red); border-color: var(--accent-red); color: var(--bg-surface); }
   .score-btn[data-score="2"].active { background: var(--accent); border-color: var(--accent); color: var(--text-primary); }
   .score-btn[data-score="3"].active { background: var(--text-primary); border-color: var(--text-primary); color: var(--bg-surface); }
 
-  .badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge { display: inline-block; padding: 3px 11px; border-radius: var(--radius-pill); font-family: var(--font-sans);
+    font-size: 10px; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
   .badge.status-new { background: #FDECC8; color: #8A5A00; }
   .badge.status-processed { background: #DCE8D5; color: #3E6B2C; }
   .badge.status-missing_file { background: #FBD9D2; color: #A13B23; }

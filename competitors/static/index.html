@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static-shared/theme.css?v=1">
+<link rel="stylesheet" href="/static-shared/theme.css?v=2">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -64,11 +64,36 @@ body {
   overflow-y: hidden;
 }
 
+/* Наведение на колонку слегка её расширяет (как в референсе). Ширины заданы в fr, поэтому
+   сумма треков не меняется — соседи просто ужимаются, горизонтальный скролл не дёргается.
+   Переход навешен на сам grid-template-columns: значения интерполируемы (одинаковое число
+   треков, все в fr). */
+.container { transition: grid-template-columns var(--t-slow); }
+
+.container:has(.column:nth-child(1):hover) { grid-template-columns: 1.92fr 1.6fr 1.1fr 1.7fr; }
+.container:has(.column:nth-child(2):hover) { grid-template-columns: 1.6fr 1.92fr 1.1fr 1.7fr; }
+.container:has(.column:nth-child(3):hover) { grid-template-columns: 1.6fr 1.6fr 1.32fr 1.7fr; }
+.container:has(.column:nth-child(4):hover) { grid-template-columns: 1.6fr 1.6fr 1.1fr 2.04fr; }
+
+
 .column {
   display: flex; flex-direction: column; background: var(--bg-surface);
   border-right: 1px solid var(--border-color); overflow-y: auto; min-width: 220px;
 }
-.column:last-child { border-right: none; background: var(--bg-page); }
+.column:last-child {
+  border-right: none;
+  /* Панель предпросмотра — с медленно «дышащим» тёплым градиентом, как в референсе. */
+  background: linear-gradient(135deg, var(--bg-subtle), #F3F0E6, var(--bg-subtle));
+  background-size: 200% 200%;
+  animation: sc-gradient-xy 14s ease-in-out infinite;
+}
+/* Её шапка — матовое стекло поверх градиента. */
+.column:last-child > .col-header {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.column:last-child:hover > .col-header { background: rgba(255, 255, 255, 0.78); }
 
 .col-header {
   padding: 16px 18px; font-family: var(--font-sans); font-size: 0.62rem; font-weight: 700;
@@ -124,7 +149,7 @@ body {
   text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
 }
 .extracted-text-wrap textarea {
-  width: 100%; min-height: 320px; font-family: inherit; font-size: 0.8rem; color: var(--text-primary);
+  width: 100%; min-height: 320px; font-family: var(--font-sans); font-size: 0.8rem; color: var(--text-primary);
   background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
   padding: 8px; resize: vertical; outline: none; line-height: 1.5;
 }

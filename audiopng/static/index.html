@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static-shared/theme.css?v=1">
+<link rel="stylesheet" href="/static-shared/theme.css?v=2">
 <style>
 *, *::before, *::after {
   box-sizing: border-box;
@@ -108,6 +108,20 @@ body {
   overflow-y: hidden;
 }
 
+/* Наведение на колонку слегка её расширяет (как в референсе). Ширины заданы в fr, поэтому
+   сумма треков не меняется — соседи просто ужимаются, горизонтальный скролл не дёргается.
+   Переход навешен на сам grid-template-columns: значения интерполируемы (одинаковое число
+   треков, все в fr). */
+.container { transition: grid-template-columns var(--t-slow); }
+
+.container:has(.column:nth-child(1):hover) { grid-template-columns: 2.4fr 2fr 1.75fr 1.75fr 1.2fr 2fr; }
+.container:has(.column:nth-child(2):hover) { grid-template-columns: 2fr 2.4fr 1.75fr 1.75fr 1.2fr 2fr; }
+.container:has(.column:nth-child(3):hover) { grid-template-columns: 2fr 2fr 2.1fr 1.75fr 1.2fr 2fr; }
+.container:has(.column:nth-child(4):hover) { grid-template-columns: 2fr 2fr 1.75fr 2.1fr 1.2fr 2fr; }
+.container:has(.column:nth-child(5):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.44fr 2fr; }
+.container:has(.column:nth-child(6):hover) { grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.2fr 2.4fr; }
+
+
 /* Column */
 .column {
   display: flex;
@@ -120,8 +134,18 @@ body {
 
 .column:last-child {
   border-right: none;
-  background: var(--bg-page);
+  /* Панель предпросмотра — с медленно «дышащим» тёплым градиентом, как в референсе. */
+  background: linear-gradient(135deg, var(--bg-subtle), #F3F0E6, var(--bg-subtle));
+  background-size: 200% 200%;
+  animation: sc-gradient-xy 14s ease-in-out infinite;
 }
+/* Её шапка — матовое стекло поверх градиента. */
+.column:last-child > .col-header {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.column:last-child:hover > .col-header { background: rgba(255, 255, 255, 0.78); }
 
 /* Column Header */
 .col-header {
@@ -151,7 +175,7 @@ body {
 
 /* Controls & Inputs */
 .select-input {
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 0.72rem;
   font-weight: 500;
   color: var(--text-primary);
@@ -183,7 +207,7 @@ body {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 7px 8px;
@@ -220,7 +244,7 @@ body {
   border: none;
   background: transparent;
   color: inherit;
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
@@ -370,6 +394,7 @@ body {
 }
 
 .img-item .name {
+  font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-primary);
@@ -804,6 +829,7 @@ body {
 
 /* Status message in header */
 .status-bar {
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -922,7 +948,7 @@ body {
       </select>
 
       <label style="font-size:0.68rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">PROMPT</label>
-      <textarea id="genPrompt" placeholder="Describe your ad creative — keep it centered, background gets extended automatically…" autocomplete="off" style="width:100%;height:90px;font-size:0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:8px;resize:vertical;font-family:inherit;outline:none"></textarea>
+      <textarea id="genPrompt" placeholder="Describe your ad creative — keep it centered, background gets extended automatically…" autocomplete="off" style="width:100%;height:90px;font-size:0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:8px;resize:vertical;font-family:var(--font-sans);outline:none"></textarea>
 
       <button class="btn primary" id="btnGenerate" style="width:100%;margin-top:10px" disabled>✨ GENERATE</button>
       <div id="genStatusMsg" style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;text-align:center;display:none"></div>
