@@ -208,7 +208,7 @@
 
 <div id="modalRoot"></div>
 
-<script src="/static-shared/sidebar.js?v=3"></script>
+<script src="/static-shared/sidebar.js?v=5"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
 <script>
 const BRANCHES = ['certif', 'claude', 'aigen'];
@@ -223,7 +223,9 @@ const TITLES = {
 // внизу страницы. Здесь только переключение содержимого вкладок.
 function showPage(name) {
   PAGES.forEach(p => document.getElementById('page-' + p).classList.toggle('active', p === name));
-  document.querySelectorAll('#sc-nav button').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+  // Подсветку пункта в сайдбаре не трогаем — sidebar.js сам слушает hashchange (location.hash
+  // ставится ниже) и пересчитывает её. Здесь раньше был селектор "#sc-nav button", который
+  // сломался, когда бар разделили на верхнюю и нижнюю группы.
   document.getElementById('pageTitle').textContent = TITLES[name][0];
   document.getElementById('pageSub').textContent = TITLES[name][1];
   location.hash = name;

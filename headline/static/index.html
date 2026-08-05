@@ -58,11 +58,6 @@ body {
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-logo {
-  width: 28px; height: 28px; background: var(--text-primary); color: #fff;
-  border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 0.85rem;
-}
 .brand-title { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
 .header-actions { display: flex; align-items: center; gap: 10px; }
 
@@ -224,9 +219,15 @@ body {
 </head>
 <body>
 
+<div class="app">
+<div id="sc-sidebar-root"></div>
+<script src="/static-shared/sidebar.js?v=5"></script>
+<div class="app-content">
+
+<!-- Хедер живёт ВНУТРИ .app-content (справа от бара), а не над .app — иначе он тянется
+     на всю ширину и накрывает верх сайдбара. Та же структура, что и в audiopng. -->
 <div class="header">
   <div class="brand">
-    <div class="brand-logo">HL</div>
     <span class="brand-title">Headline</span>
   </div>
   <div class="header-actions">
@@ -246,10 +247,6 @@ body {
   <div class="progress-bar" id="globalProgressBar"></div>
 </div>
 
-<div class="app">
-<div id="sc-sidebar-root"></div>
-<script src="/static-shared/sidebar.js?v=2"></script>
-<div class="app-content">
 <div class="container">
 
   <!-- COL 1: Заголовки -->
