@@ -1,0 +1,237 @@
+/* ============================================================================
+   Static Creo — единая дизайн-система.
+
+   Подключается ВСЕМИ страницами (audiopng, competitors, headline, dashboard)
+   первым, ДО собственного <style> страницы: здесь живут токены и базовые
+   примитивы, а страница поверх дописывает только свою раскладку. Раньше один
+   и тот же блок :root был скопирован в трёх файлах и расходился при правках —
+   теперь он ровно один, здесь.
+
+   Палитра — тёплая бумажная: кремовый фон, белые панели, золотой акцент
+   вместо синего. Шрифты: серифный Lora для текста и заголовков, Inter для
+   микро-подписей капсом, JetBrains Mono для цифр/данных.
+   ========================================================================= */
+
+:root {
+  /* ── Поверхности ───────────────────────────────────────────── */
+  --bg-page:      #FDFBF7;  /* фон приложения */
+  --bg-surface:   #FFFFFF;  /* панели, колонки, карточки */
+  --bg-subtle:    #FAF8F2;  /* шапки колонок, дропзоны, «утопленные» блоки */
+  --bg-cream:     #F9F6ED;  /* бейджи, мягкая заливка */
+
+  /* ── Границы ───────────────────────────────────────────────── */
+  --border-color: #EAE5D9;
+  --border-hover: #D5CFC1;
+
+  /* ── Текст ─────────────────────────────────────────────────── */
+  --text-primary:   #1A1A1A;  /* заголовки, основной текст */
+  --text-body:      #4A4535;  /* текст внутри контролов */
+  --text-secondary: #8B8370;  /* подписи, лейблы */
+  --text-muted:     #A39B87;  /* подсказки, плейсхолдеры, italic-хинты */
+
+  /* ── Акценты ───────────────────────────────────────────────── */
+  --accent-primary: #1A1A1A;  /* тёмные (primary) кнопки */
+  --accent-hover:   #333333;
+  --accent:         #C5B382;  /* золото — выбранное состояние, фокус */
+  --accent-border:  #EADCA6;  /* рамка выбранного пункта */
+  --accent-bg:      #F3EAD3;  /* заливка выбранного пункта */
+  --accent-soft:    #F9F6ED;
+
+  /* Статусы */
+  --accent-green:        #16a34a;
+  --accent-green-bg:     #f0fdf4;
+  --accent-green-border: #bbf7d0;
+  --accent-red:          #E8604C;
+  --accent-red-bg:       #FDF3F1;
+  --accent-amber:        #C2650B;
+  --accent-amber-bg:     #FDF6E7;
+
+  /* ── Радиусы ───────────────────────────────────────────────── */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-pill: 999px;
+
+  /* ── Тени ──────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(26, 26, 26, 0.06), 0 2px 4px -2px rgba(26, 26, 26, 0.04);
+  --shadow-lg: 0 12px 32px -8px rgba(26, 26, 26, 0.12), 0 4px 8px -4px rgba(26, 26, 26, 0.06);
+
+  /* ── Движение ──────────────────────────────────────────────── */
+  --t-fast: 0.15s ease;
+  --t-mid:  0.3s ease;
+  --t-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Шрифты ────────────────────────────────────────────────── */
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ── База ────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-serif);
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection { background: var(--accent-bg); color: var(--text-primary); }
+
+/* Тонкий скроллбар. Дорожка прозрачная, у самого бегунка 2px прозрачной рамки
+   через background-clip — визуально он тонкий (4px), но зона захвата остаётся
+   полные 8px, так что мышью попасть по нему по-прежнему реально. */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); background-clip: padding-box; }
+
+/* Единый видимый фокус для клавиатуры (мышиные клики его не показывают). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Анимации ────────────────────────────────────────────────── */
+
+/* Медленный перелив — на primary-кнопке и выбранном пункте списка. */
+@keyframes sc-gradient-xy {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.sc-shimmer {
+  background-size: 200% 200%;
+  animation: sc-gradient-xy 8s ease-in-out infinite;
+}
+
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+
+/* Появление карточек/строк списка. */
+@keyframes sc-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.sc-fade-up { animation: sc-fade-up 0.35s ease both; }
+
+/* ── Примитивы ───────────────────────────────────────────────── */
+
+/* Микро-подпись капсом с разрядкой — шапки колонок, бейджи, лейблы. */
+.u-label {
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.u-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.u-hint { color: var(--text-muted); font-style: italic; }
+
+/* Матовое стекло — шапка колонки предпросмотра поверх градиента. */
+.u-glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Номер шага в шапке колонки. */
+.col-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--border-color);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+/* Кнопки-пилюли. Страницы дописывают размеры, здесь — форма и поведение. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t-fast), border-color var(--t-fast),
+              box-shadow var(--t-fast), transform var(--t-fast), opacity var(--t-fast);
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-page);
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-sm);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+.btn.primary {
+  background: linear-gradient(90deg, #1A1A1A, #3A3A3A, #1A1A1A);
+  background-size: 200% 200%;
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.btn.primary:hover:not(:disabled) {
+  animation: sc-gradient-xy 4s ease-in-out infinite;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: transparent;
+}
+.btn.primary:disabled { background: #C4BFB2; color: #fff; }
+
+.btn.danger { border-color: var(--accent-red); color: var(--accent-red); background: var(--bg-surface); }
+.btn.danger:hover:not(:disabled) { background: var(--accent-red-bg); border-color: var(--accent-red); }
+
+/* Мелкий бейдж-капсула (AUTO LIGHT/DARK, GPU WebCodecs, ★ master и т.п.). */
+.u-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  background: var(--bg-cream);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Уважает системную настройку «меньше движения». */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

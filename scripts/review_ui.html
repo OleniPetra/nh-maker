@@ -4,130 +4,143 @@
 <meta charset="utf-8">
 <title>Static Creo</title>
 <link rel="icon" type="image/svg+xml" href="/static-shared/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static-shared/theme.css?v=1">
 <style>
   /* Явные color везде — намеренно НЕ используем color-scheme:light dark,
      это и было причиной бага "белый текст на белой кнопке" (нативная тёмная
      UA-раскраска form-элементов). */
   * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, system-ui, sans-serif; margin: 0;
-    background: #EAE3D5; color: #221E17;
-  }
+  body { margin: 0; }
   .app { display: flex; min-height: 100vh; }
   /* .sidebar* — стили сайдбара теперь инжектит scripts/shared/sidebar.js (общий с audiopng) */
 
   .content { flex: 1; min-width: 0; }
   header {
     display: flex; align-items: center; gap: 16px; padding: 22px 32px;
-    background: #EAE3D5;
+    background: var(--bg-page);
   }
-  header h1 { font-size: 20px; margin: 0; color: #221E17; }
-  header .sub { font-size: 13px; color: #8A8275; margin-top: 2px; }
+  header h1 { font-size: 26px; font-weight: 500; letter-spacing: -0.01em; margin: 0; color: var(--text-primary); }
+  header .sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
   .balance-pill {
-    margin-left: auto; background: #FFFFFF; color: #221E17; padding: 8px 16px;
-    border-radius: 999px; font-size: 12px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08);
-    white-space: nowrap;
+    margin-left: auto; background: var(--bg-surface); color: var(--text-body);
+    border: 1px solid var(--border-color); padding: 8px 16px;
+    border-radius: var(--radius-pill); font-family: var(--font-sans); font-size: 12px;
+    font-weight: 600; box-shadow: var(--shadow-sm); white-space: nowrap;
   }
-  .balance-pill.low { background: #E8604C; color: #FFFFFF; }
+  .balance-pill.low { background: var(--accent-red); color: var(--bg-surface); }
 
   main { padding: 0 32px 60px; }
   .page { display: none; }
   .page.active { display: block; }
 
   .panel {
-    background: #FFFFFF; border-radius: 20px; padding: 20px 22px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 20px;
+    background: var(--bg-surface); border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl); padding: 24px 26px;
+    box-shadow: var(--shadow-sm); margin-bottom: 20px;
   }
 
-  button.btn {
-    font: inherit; font-size: 13px; padding: 9px 18px; border-radius: 999px;
-    border: 1.5px solid #221E17; background: #FFFFFF; color: #221E17; cursor: pointer;
-  }
-  button.btn.primary { background: #221E17; color: #FFFFFF; border-color: #221E17; font-weight: 600; }
-  button.btn.primary:disabled { background: #B9B2A2; border-color: #B9B2A2; color: #FFFFFF; cursor: default; }
-  button.btn:disabled { opacity: .5; cursor: default; }
-  button.btn.small { padding: 5px 12px; font-size: 11px; }
-  button.btn.danger { border-color: #E8604C; color: #E8604C; background: #FFFFFF; }
+  /* .btn — в /static-shared/theme.css */
+  button.btn.small { padding: 5px 13px; font-size: 0.68rem; }
 
   .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-  #creativesStatus { font-size: 13px; color: #8A8275; }
-  #creativesStatus.dirty { color: #C2650B; font-weight: 600; }
+  #creativesStatus { font-size: 13px; color: var(--text-muted); }
+  #creativesStatus.dirty { color: var(--accent-amber); font-weight: 600; }
 
   select, textarea, input[type=text] {
-    font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 10px;
-    border: 1.5px solid #DDD5C4; background: #FFFFFF; color: #221E17;
+    font: inherit; font-size: 13px; padding: 8px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);
+    outline: none; transition: border-color var(--t-fast);
   }
+  select:focus, textarea:focus, input[type=text]:focus { border-color: var(--accent); }
   textarea { resize: vertical; }
 
   table.data-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
   table.data-table th {
-    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-    color: #8A8275; padding: 0 12px 6px; cursor: pointer; user-select: none; font-weight: 600;
+    text-align: left; font-family: var(--font-sans); font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--text-secondary); padding: 0 14px 8px; cursor: pointer;
+    user-select: none; font-weight: 700; transition: color var(--t-fast);
   }
-  table.data-table th:hover { color: #221E17; }
+  table.data-table th:hover { color: var(--text-primary); }
   table.data-table th .arrow { font-size: 9px; margin-left: 3px; }
-  table.data-table td { background: #FFFFFF; padding: 14px; vertical-align: top; }
+  table.data-table td { background: var(--bg-surface); padding: 16px; vertical-align: top;
+    border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
+  table.data-table tr.row td:first-child { border-left: 1px solid var(--border-color); }
+  table.data-table tr.row td:last-child { border-right: 1px solid var(--border-color); }
   table.data-table tr.row td:first-child { border-radius: 16px 0 0 16px; }
   table.data-table tr.row td:last-child { border-radius: 0 16px 16px 0; }
 
   .thumb-cell { display: flex; gap: 12px; }
   .thumb {
-    width: 168px; height: 298px; object-fit: cover; border-radius: 12px; background: #EEE9DC;
+    width: 168px; height: 298px; object-fit: cover; border-radius: 12px; background: var(--bg-cream);
     display: block; cursor: zoom-in; flex-shrink: 0;
   }
-  .filename-cell { font-size: 11px; color: #8A8275; word-break: break-all; margin-top: 8px; max-width: 168px; }
+  .filename-cell { font-size: 11px; color: var(--text-muted); word-break: break-all; margin-top: 8px; max-width: 168px; }
 
   .branch-score-cell { display: flex; flex-direction: column; gap: 8px; width: 92px; }
   .branch-score-cell select { padding: 6px 8px; font-size: 12px; width: 100%; }
   .score-row { display: flex; gap: 4px; }
   .score-btn {
-    font: inherit; font-size: 12px; padding: 6px 0; flex: 1; border-radius: 8px; border: 1.5px solid #DDD5C4;
-    background: #FFFFFF; color: #8A8275; cursor: pointer;
+    font: inherit; font-size: 12px; padding: 6px 0; flex: 1; border-radius: 8px; border: 1.5px solid var(--border-color);
+    background: var(--bg-surface); color: var(--text-muted); cursor: pointer;
   }
-  .score-btn[data-score="1"].active { background: #E8604C; border-color: #E8604C; color: #FFFFFF; }
-  .score-btn[data-score="2"].active { background: #F0B429; border-color: #F0B429; color: #221E17; }
-  .score-btn[data-score="3"].active { background: #221E17; border-color: #221E17; color: #FFFFFF; }
+  .score-btn[data-score="1"].active { background: var(--accent-red); border-color: var(--accent-red); color: var(--bg-surface); }
+  .score-btn[data-score="2"].active { background: var(--accent); border-color: var(--accent); color: var(--text-primary); }
+  .score-btn[data-score="3"].active { background: var(--text-primary); border-color: var(--text-primary); color: var(--bg-surface); }
 
   .badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
   .badge.status-new { background: #FDECC8; color: #8A5A00; }
   .badge.status-processed { background: #DCE8D5; color: #3E6B2C; }
   .badge.status-missing_file { background: #FBD9D2; color: #A13B23; }
-  .badge.status-csv_orphan { background: #F1EADC; color: #8A8275; }
+  .badge.status-csv_orphan { background: var(--bg-subtle); color: var(--text-muted); }
   .badge.stale { background: #FDECC8; color: #8A5A00; }
-  .badge.archetype { background: #EFE9DC; color: #221E17; font-weight: 500; }
+  .badge.archetype { background: var(--bg-cream); color: var(--text-primary); font-weight: 500; }
 
   .status-cell { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-  .status-cell .created-at { font-size: 11px; color: #8A8275; }
+  .status-cell .created-at { font-size: 11px; color: var(--text-muted); }
 
   .note-cell textarea { width: 100%; min-height: 298px; font-size: 13px; line-height: 1.4; }
   .note-cell { min-width: 320px; }
 
   .stat-cards { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
   .stat-card { flex: 1; min-width: 170px; }
-  .stat-card h3 { margin: 0 0 8px; font-size: 13px; color: #8A8275; font-weight: 600; }
+  .stat-card h3 { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); font-weight: 600; }
   .stat-card .num { font-size: 26px; font-weight: 700; }
   .stat-card .score-bar { display: flex; gap: 10px; font-size: 12px; margin-top: 8px; }
-  .stat-card .s1 { color: #E8604C; } .stat-card .s2 { color: #C2650B; } .stat-card .s3 { color: #221E17; }
+  .stat-card .s1 { color: var(--accent-red); } .stat-card .s2 { color: var(--accent-amber); } .stat-card .s3 { color: var(--text-primary); }
 
   .modal-overlay { position: fixed; inset: 0; background: rgba(34,30,23,.5); display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; z-index: 50; overflow-y: auto; }
-  .modal { background: #FFFFFF; border-radius: 20px; padding: 26px; max-width: 900px; width: 100%; }
-  .modal pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #F1EADC; padding: 14px; border-radius: 12px; max-height: 60vh; overflow: auto; color: #221E17; }
+  .modal { background: var(--bg-surface); border-radius: 20px; padding: 26px; max-width: 900px; width: 100%; }
+  .modal pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--bg-subtle); padding: 14px; border-radius: 12px; max-height: 60vh; overflow: auto; color: var(--text-primary); }
 
-  .log-box { background: #221E17; color: #D8D0C0; font-family: ui-monospace, monospace; font-size: 12px; padding: 14px; border-radius: 14px; max-height: 260px; overflow-y: auto; white-space: pre-wrap; margin-bottom: 16px; }
+  .log-box { background: var(--text-primary); color: #D8D0C0; font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.6; padding: 18px; border-radius: var(--radius-lg); max-height: 260px; overflow-y: auto;
+    white-space: pre-wrap; margin-bottom: 16px; }
 
-  .brief h3 { margin: 22px 0 8px; font-size: 14px; color: #221E17; }
+  .brief h3 { margin: 26px 0 10px; font-size: 17px; font-weight: 500; color: var(--text-primary); }
   .brief p { line-height: 1.5; }
-  .brief pre.prompt { background: #F1EADC; padding: 14px; border-radius: 14px; font-size: 12px; white-space: pre-wrap; word-break: break-word; color: #221E17; }
+  .brief pre.prompt { background: var(--bg-subtle); border: 1px solid var(--border-color); padding: 18px;
+    border-radius: var(--radius-lg); font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-word; color: var(--text-body); }
   .brief .copy-field { position: relative; }
-  .brief .copy-field-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+  /* Кнопки в обычном потоке над промптом, а не absolute поверх него: при position:absolute
+     они накрывали первую строку текста, и её было не прочитать. */
+  .brief .copy-field-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
   .pattern-list { list-style: none; padding: 0; margin: 0; }
-  .pattern-list li { background: #F6F2E7; border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; }
-  .pattern-list .src { color: #8A8275; font-size: 11px; margin-top: 4px; }
+  .pattern-list li { background: var(--bg-subtle); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 8px; font-size: 13px; line-height: 1.55; }
+  .pattern-list .src { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
 
-  .history-item { border-radius: 14px; padding: 14px 18px; margin-bottom: 8px; cursor: pointer; background: #F6F2E7; }
-  .history-item:hover { background: #F1EADC; }
+  .history-item {
+    border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 10px; cursor: pointer;
+    background: var(--bg-surface); border: 1px solid var(--border-color);
+    transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+  }
+  .history-item:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }
   .history-item .h-niche { font-weight: 700; }
-  .history-item .h-meta { color: #8A8275; font-size: 12px; margin-top: 2px; }
+  .history-item .h-meta { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -208,7 +221,7 @@
 
 <div id="modalRoot"></div>
 
-<script src="/static-shared/sidebar.js?v=5"></script>
+<script src="/static-shared/sidebar.js?v=6"></script>
 <script src="/static-shared/handoff.js?v=2"></script>
 <script>
 const BRANCHES = ['certif', 'claude', 'aigen'];
@@ -416,8 +429,8 @@ const Creatives = (() => {
         <h3>${branch}</h3>
         <div class="num">${s.total}</div>
         <div class="score-bar"><span class="s1">1: ${s.score_1}</span><span class="s2">2: ${s.score_2}</span><span class="s3">3: ${s.score_3}</span></div>
-        <div style="margin-top:6px;color:#8A8275;font-size:12px">с заметкой: ${s.with_note}</div>
-      </div>`).join('') || '<p style="color:#8A8275">База пуста.</p>';
+        <div style="margin-top:6px;color:var(--text-muted);font-size:12px">с заметкой: ${s.with_note}</div>
+      </div>`).join('') || '<p style="color:var(--text-muted)">База пуста.</p>';
   }
 
   function sortBy(key) {
@@ -548,7 +561,7 @@ const Generate = (() => {
     pollJob(data.job_id, logEl, (job) => {
       buttons.forEach(b => b.disabled = false);
       loadBalance();
-      if (job.error) { document.getElementById('genResult').innerHTML = `<p style="color:#E8604C">${escapeHtml(job.error)}</p>`; return; }
+      if (job.error) { document.getElementById('genResult').innerHTML = `<p style="color:var(--accent-red)">${escapeHtml(job.error)}</p>`; return; }
       document.getElementById('genResult').innerHTML = renderBrief(job.result.brief);
     });
   }
@@ -578,7 +591,7 @@ const History = (() => {
           <div class="h-meta">${it.branch} · ${it.archetype || ''} · ${(it.created_at||'').slice(0,16).replace('T',' ')} · ${it.model_used}</div>
         </div>
         <button class="btn danger small" onclick="event.stopPropagation(); History.deleteOne('${it.brief_id}')">Удалить</button>
-      </div>`).join('') || '<p style="color:#8A8275">Пока нет сгенерированных брифов.</p>';
+      </div>`).join('') || '<p style="color:var(--text-muted)">Пока нет сгенерированных брифов.</p>';
   }
   async function showDetail(briefId) {
     const res = await fetch('/api/db/briefs/' + briefId);

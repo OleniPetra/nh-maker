@@ -7,32 +7,9 @@
 <link rel="icon" type="image/svg+xml" href="/static-shared/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static-shared/theme.css?v=1">
 <style>
-:root {
-  /* Единая палитра Static Creo (см. scripts/review_ui.html) */
-  --bg-page: #EAE3D5;
-  --bg-surface: #ffffff;
-  --bg-subtle: #F1EADC;
-  --border-color: #DDD5C4;
-  --border-hover: #C9BFA9;
-  --text-primary: #221E17;
-  --text-secondary: #5c5548;
-  --text-muted: #8A8275;
-  --accent-primary: #221E17;
-  --accent-hover: #3a352b;
-  --accent-blue: #2563eb;
-  --accent-green: #16a34a;
-  --accent-green-bg: #f0fdf4;
-  --accent-green-border: #bbf7d0;
-  --accent-red: #E8604C;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-}
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -40,9 +17,6 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-page);
-  color: var(--text-primary);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -51,85 +25,54 @@ body {
 
 /* Header */
 .header {
-  height: 56px;
-  padding: 0 20px;
-  background: var(--bg-surface);
+  height: 64px;
+  padding: 0 24px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: var(--shadow-sm);
+  gap: 16px;
+  flex-shrink: 0;
   z-index: 10;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .brand-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .brand-badge {
-  font-size: 0.65rem;
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  padding: 2px 6px;
-  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--bg-cream);
+  color: var(--text-muted);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-sm);
-  white-space: nowrap;
-}
-
-.btn:hover:not(:disabled) {
-  border-color: var(--border-hover);
-  background: var(--bg-subtle);
-}
-
-.btn.primary {
-  background: var(--accent-primary);
-  color: #ffffff;
-  border-color: var(--accent-primary);
-}
-
-.btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
+  flex-shrink: 0;
 }
 
 /* Progress bar */
@@ -142,7 +85,7 @@ body {
 
 .progress-bar {
   height: 100%;
-  background: var(--accent-blue);
+  background: var(--accent);
   width: 0%;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -160,7 +103,7 @@ body {
   display: grid;
   grid-template-columns: 2fr 2fr 1.75fr 1.75fr 1.2fr 2fr;
   flex: 1;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 64px);
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -182,36 +125,29 @@ body {
 
 /* Column Header */
 .col-header {
-  padding: 12px 14px;
-  font-size: 0.72rem;
+  padding: 16px 18px;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
-  background: #f8fafc;
+  background: var(--bg-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   position: sticky;
   top: 0;
   z-index: 5;
+  transition: background var(--t-mid);
 }
-
-.col-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--text-primary);
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 700;
-  margin-right: 6px;
-}
+.column:hover > .col-header { background: var(--bg-surface); }
+.col-header { flex-wrap: wrap; row-gap: 4px; }
+.col-header > div:first-child { display: flex; align-items: center; }
+.col-header > span { font-size: 0.55rem; color: var(--text-muted); letter-spacing: 0.1em; }
+/* .col-step — в /static-shared/theme.css */
 
 /* Controls & Inputs */
 .select-input {
@@ -228,7 +164,7 @@ body {
 }
 
 .select-input:focus {
-  border-color: var(--accent-blue);
+  border-color: var(--accent);
 }
 
 /* Mode toggle (Upload / AI Generate) */
@@ -239,7 +175,7 @@ body {
   background: var(--bg-subtle);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 3px;
+  padding: 4px;
 }
 
 .mode-toggle-btn {
@@ -253,7 +189,7 @@ body {
   padding: 7px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .mode-toggle-btn:hover {
@@ -294,27 +230,43 @@ body {
 /* Dropzone */
 .dropzone {
   margin: 12px;
-  padding: 18px 12px;
-  border: 2px dashed var(--border-color);
-  border-radius: var(--radius-md);
+  padding: 26px 14px;
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-lg);
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.78rem;
-  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  transition: border-color var(--t-mid), background var(--t-mid), color var(--t-mid);
   cursor: pointer;
-  background: #fafafa;
+  background: var(--bg-subtle);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
 }
 
 .dropzone:hover, .dropzone.dragover {
-  border-color: var(--accent-blue);
-  background: #f0f7ff;
-  color: var(--accent-blue);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-body);
 }
+
+/* Иконка загрузки — в белом кружке, как в референсе. */
+.dropzone-icon-wrap {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: color var(--t-mid), transform var(--t-mid);
+}
+.dropzone:hover .dropzone-icon-wrap { color: var(--accent); transform: translateY(-2px); }
 
 .dropzone.loaded {
   border-color: var(--accent-green-border);
@@ -342,15 +294,18 @@ body {
 
 .img-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   padding: 10px;
   border-radius: var(--radius-md);
   margin-bottom: 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  transition: all 0.15s ease;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
   box-shadow: var(--shadow-sm);
+  animation: sc-fade-up 0.35s ease both;
+  position: relative;
   max-width: 100%;
   overflow: hidden; /* safety net — thumb width is set inline per-image (fitBox), this just
                         guarantees it can never visually escape the row regardless of ratio */
@@ -358,22 +313,23 @@ body {
 
 .img-item:hover {
   border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .img-thumb {
   position: relative;
-  width: 144px;
-  height: 256px;
-  max-width: 144px;
-  max-height: 256px;
+  width: 92px;
+  height: 164px;
+  max-width: 92px;
+  max-height: 164px;
   flex-shrink: 0;
 }
 
 .img-thumb img {
   width: 100%;
   height: 100%;
-  max-width: 144px;
-  max-height: 256px;
+  max-width: 92px;
+  max-height: 164px;
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -403,13 +359,11 @@ body {
   animation: sc-spin 0.8s linear infinite;
 }
 
-@keyframes sc-spin {
-  to { transform: rotate(360deg); }
-}
 
 .img-item .info {
-  flex: 1;
+  flex: 1 1 110px;
   min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -417,12 +371,14 @@ body {
 
 .img-item .name {
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
+  line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .img-item .size {
@@ -431,45 +387,44 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
-.img-item .del {
+.img-item .del,
+.img-item .retry {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  opacity: 0;
   width: 26px;
   height: 26px;
   border-radius: 50%;
   border: none;
-  background: var(--bg-subtle);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: background var(--t-fast), color var(--t-fast), opacity var(--t-fast);
   flex-shrink: 0;
 }
 
 .img-item .del:hover {
   background: var(--accent-red);
+  border-color: var(--accent-red);
   color: #fff;
 }
 
-.img-item .retry {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: none;
-  background: var(--bg-subtle);
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
+.img-item .retry { right: 40px; font-size: 0.85rem; }
+/* Кнопки проявляются по наведению/фокусу — чтобы не спорить с превью за внимание. */
+.img-item:hover .del, .img-item:hover .retry,
+.img-item .del:focus-visible, .img-item .retry:focus-visible { opacity: 1; }
 
 .img-item .retry:hover {
-  background: var(--accent-blue);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -508,18 +463,25 @@ body {
   margin-bottom: 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  transition: all 0.15s ease;
+  transition: border-color var(--t-fast), background var(--t-fast),
+              transform var(--t-fast), box-shadow var(--t-fast);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
 
 .tpl-item:hover {
   border-color: var(--border-hover);
+  background: var(--bg-subtle);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .tpl-item.active {
-  border-color: var(--accent-blue);
-  background: #f0f7ff;
+  border-color: var(--accent-border);
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent-bg), var(--accent-soft));
+  background-size: 200% 200%;
+  animation: sc-gradient-xy 8s ease-in-out infinite;
+  color: var(--text-body);
 }
 
 .tpl-item img {
@@ -556,26 +518,35 @@ body {
 .tpl-item-auto .name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+}
+.tpl-item-auto .name-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .tpl-auto-badge {
-  font-size: 0.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.55rem;
   font-weight: 700;
-  color: var(--text-muted);
-  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-cream);
   border: 1px solid var(--border-color);
-  padding: 1px 6px;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.1em;
   flex-shrink: 0;
 }
 
 .tone-badge {
   font-size: 0.65rem;
   font-weight: 600;
-  color: var(--accent-blue);
+  color: var(--accent);
 }
 
 .master-badge {
@@ -654,7 +625,7 @@ body {
   transition: background 0.15s ease;
   z-index: 2;
 }
-.tone-switch-btn:hover { background: var(--accent-blue); }
+.tone-switch-btn:hover { background: var(--accent); }
 .tone-switch-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
 
 .adjust-sliders-wrap {
@@ -756,18 +727,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #09090b;
-  border-radius: var(--radius-lg);
-  border: 1px solid #27272a;
+  background: linear-gradient(180deg, #111 0%, #222 100%);
+  border-radius: 20px;
+  border: none;
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 0 8px #1A1A1A,
+              0 0 0 9px rgba(26, 26, 26, 0.15),
+              var(--shadow-lg);
   max-height: 380px;
   aspect-ratio: 9 / 16;
-  margin: 0 auto;
+  margin: 10px auto;
   width: 100%;
   max-width: 210px;
   position: relative;
+  transition: transform var(--t-slow);
 }
+.preview-video-wrap:hover { transform: scale(1.015); }
 
 .preview-video-wrap video,
 .preview-video-wrap img#imagePreview {
@@ -778,7 +753,7 @@ body {
 }
 
 .preview-video-wrap .placeholder {
-  color: #71717a;
+  color: rgba(255, 255, 255, 0.45);
   text-align: center;
   padding: 16px;
   display: flex;
@@ -823,7 +798,7 @@ body {
 
 .file-item.active {
   background: #dbeafe;
-  color: var(--accent-blue);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -866,7 +841,7 @@ body {
 
 <div class="app">
 <div id="sc-sidebar-root"></div>
-<script src="/static-shared/sidebar.js?v=5"></script>
+<script src="/static-shared/sidebar.js?v=6"></script>
 <div class="app-content">
 
 <div class="header">
@@ -921,7 +896,7 @@ body {
     <div id="uploadSection">
       <div class="dropzone" id="imgDropzone">
         <input type="file" id="imgInput" multiple accept="image/*">
-        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="dropzone-icon-wrap"><svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
         <div>Drop images here</div>
         <span style="font-size:0.68rem;color:var(--text-muted)">PNG, JPG, WebP</span>
       </div>
@@ -931,7 +906,7 @@ body {
     <div id="upload34Section" style="display:none">
       <div class="dropzone" id="img34Dropzone">
         <input type="file" id="img34Input" multiple accept="image/*">
-        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="dropzone-icon-wrap"><svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
         <div>Drop 3:4 creatives here</div>
         <span style="font-size:0.68rem;color:var(--text-muted)">Background auto-extended to 9:16</span>
       </div>
@@ -1400,7 +1375,7 @@ function removeImage(id) {
 
 function renderImages() {
   imgQueue.innerHTML = images.map(img => {
-    const { w: thumbW, h: thumbH } = fitBox(img.targetW || TARGET_W, img.targetH || TARGET_H, 144, 256);
+    const { w: thumbW, h: thumbH } = fitBox(img.targetW || TARGET_W, img.targetH || TARGET_H, 92, 164);
     return `
     <div class="img-item${img.status === 'processing' ? ' processing' : ''}">
       <div class="img-thumb" style="width:${thumbW}px;height:${thumbH}px">
@@ -1624,7 +1599,7 @@ function renderTemplateList(slot) {
   const hasAny = Object.keys(groups).length || standalone.length;
 
   let html = `<div class="tpl-item ${!st.selectedTemplateId ? 'active' : ''}" data-id="">
-    <input type="radio" name="tpl-${slot}" ${!st.selectedTemplateId ? 'checked' : ''} style="accent-color:var(--accent-blue)">
+    <input type="radio" name="tpl-${slot}" ${!st.selectedTemplateId ? 'checked' : ''} style="accent-color:var(--accent)">
     <span class="name" style="color:var(--text-muted);font-style:italic">None (Skip overlay)</span>
   </div>`;
 
@@ -1633,14 +1608,14 @@ function renderTemplateList(slot) {
     const active = st.selectedTemplateId === gid;
     return `
     <div class="tpl-item tpl-item-auto ${active ? 'active' : ''}" data-id="${esc(gid)}">
-      <input type="radio" name="tpl-${slot}" ${active ? 'checked' : ''} style="accent-color:var(--accent-blue)">
-      <span class="name">${esc(base)}<span class="tpl-auto-badge">Auto light/dark</span></span>
+      <input type="radio" name="tpl-${slot}" ${active ? 'checked' : ''} style="accent-color:var(--accent)">
+      <span class="name"><span class="name-text">${esc(base)}</span><span class="tpl-auto-badge" title="Автовыбор светлой/тёмной версии под фон картинки">Auto</span></span>
     </div>`;
   }).join('');
 
   html += standalone.map(t => `
     <div class="tpl-item ${st.selectedTemplateId === t.id ? 'active' : ''}" data-id="${t.id}">
-      <input type="radio" name="tpl-${slot}" ${st.selectedTemplateId === t.id ? 'checked' : ''} style="accent-color:var(--accent-blue)">
+      <input type="radio" name="tpl-${slot}" ${st.selectedTemplateId === t.id ? 'checked' : ''} style="accent-color:var(--accent)">
       <img src="templates/${t.id}.png" onerror="this.src='templates/${t.id}.webp'" loading="lazy">
       <span class="name">${esc(t.name)}</span>
     </div>

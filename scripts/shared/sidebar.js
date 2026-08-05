@@ -57,25 +57,31 @@
   // иконки уезжали вверх вместе с контентом и до нижней группы нужно было доскроллить.
   // sticky (а не fixed) — чтобы колонка в 76px по-прежнему занимала место в потоке и
   // не наезжала на контент справа.
+  // Оформление — из общей дизайн-системы (/static-shared/theme.css): бар светлый,
+  // бумажный, с тонкой границей; иконки приглушённые, активная — тёмная «чернильная».
   var CSS = "" +
     "#sc-sidebar-root { display: flex; position: sticky; top: 0; align-self: flex-start;" +
     "  height: 100vh; z-index: 30; }" +
-    ".sidebar { width: 76px; height: 100%; background: #221E17; display: flex; flex-direction: column;" +
-    "  align-items: center; padding: 14px 0; gap: 10px; flex-shrink: 0; }" +
-    ".sidebar nav { display: flex; flex-direction: column; align-items: center; gap: 10px; }" +
+    ".sidebar { width: 64px; height: 100%; background: var(--bg-subtle, #FAF8F2);" +
+    "  border-right: 1px solid var(--border-color, #EAE5D9); display: flex; flex-direction: column;" +
+    "  align-items: center; padding: 16px 0; gap: 12px; flex-shrink: 0; }" +
+    ".sidebar nav { display: flex; flex-direction: column; align-items: center; gap: 12px; }" +
     // Единый стиль для ВСЕХ кнопок бара (разделы, вкладки дашборда, стрелка) — одинаковый
     // размер, радиус и отступы, чтобы бар читался одним рядом равноудалённых иконок.
-    ".sidebar button { width: 44px; height: 44px; border-radius: 14px; border: none; background: transparent;" +
-    "  color: #A79E8E; display: flex; align-items: center; justify-content: center; cursor: pointer;" +
-    "  flex-shrink: 0; padding: 0; transition: background .15s ease, color .15s ease; }" +
-    ".sidebar button:hover { background: #2E2921; color: #EAE3D5; }" +
-    ".sidebar button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8;" +
+    ".sidebar button { width: 40px; height: 40px; border-radius: 12px; border: none; background: transparent;" +
+    "  color: var(--text-muted, #A39B87); display: flex; align-items: center; justify-content: center;" +
+    "  cursor: pointer; flex-shrink: 0; padding: 0;" +
+    "  transition: background .3s ease, color .3s ease, transform .3s ease; }" +
+    ".sidebar button:hover { color: var(--text-primary, #1A1A1A); transform: scale(1.12); }" +
+    ".sidebar button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5;" +
     "  stroke-linecap: round; stroke-linejoin: round; }" +
-    ".sidebar button.active, .sidebar button.active:hover { background: #F0B429; color: #221E17; }" +
+    ".sidebar button.active, .sidebar button.active:hover {" +
+    "  background: var(--accent-primary, #1A1A1A); color: #F5EAD2; transform: none;" +
+    "  box-shadow: var(--shadow-sm, 0 1px 2px rgba(26,26,26,.04)); }" +
     ".sidebar .sc-spacer { flex: 1 1 auto; }" +
     ".sidebar .sc-dash-nav { display: none; }" +
     ".sidebar .sc-dash-nav.open { display: flex; }" +
-    ".sidebar .sc-dash-toggle svg { width: 16px; height: 16px; transition: transform .15s ease; }" +
+    ".sidebar .sc-dash-toggle svg { width: 16px; height: 16px; transition: transform .3s ease; }" +
     ".sidebar .sc-dash-toggle.open svg { transform: rotate(180deg); }";
 
   function injectCss() {
