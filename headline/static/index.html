@@ -207,19 +207,28 @@ body {
 .file-item {
   font-size: 0.75rem; font-weight: 500; padding: 8px 10px; margin-bottom: 4px; border-radius: var(--radius-sm);
   cursor: pointer; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-body); transition: background var(--t-fast), border-color var(--t-fast);
-  display: flex; align-items: center; gap: 8px;
+  /* Две кнопки перезапуска в узкой колонке не помещаются в одну строку с именем — разрешаем
+     перенос, иначе имя файла выдавливается полностью. */
+  display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap;
 }
 .file-item:hover { background: var(--bg-cream); border-color: var(--border-hover); }
 .file-item.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--text-body); font-weight: 600; }
 .file-item.processing { color: var(--accent-amber); cursor: default; }
 .file-item.error { background: #fef2f2; color: var(--accent-red); cursor: default; }
-.file-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item-name { flex: 1 1 70px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
+/* Та же иконка (↻) и та же подпись «Генерация», что и в Competitors Static — действие
+   одинаковое. Отдельной кнопки «Аутпеинт» здесь нет: в этом пайплайне аутпеинта нет вовсе,
+   бэкенд делает один вызов edit-модели (см. headline/headline_api.py). */
 .file-item-retry {
-  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg-surface);
-  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center;
-  justify-content: center; transition: all 0.15s ease;
+  flex-shrink: 0; height: 22px; padding: 0 7px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color); background: var(--bg-surface);
+  color: var(--text-secondary); cursor: pointer; font-family: var(--font-sans); font-size: 0.62rem;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
-.file-item-retry:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.file-item-retry .ico { font-size: 0.75rem; line-height: 1; }
+.file-item-retry:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
 .file-item-retry:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
@@ -585,7 +594,11 @@ function renderOutputFiles() {
     <div class="file-item${cls ? ' ' + cls : ''}" data-idx="${i}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
       <span class="file-item-name" title="${esc(f.name)}">${label}</span>
-      <button class="file-item-retry" data-idx="${i}" title="Retry" ${busy ? 'disabled' : ''}>↻</button>
+      <span class="file-item-actions">
+        <button class="file-item-retry" data-idx="${i}"
+          title="Перезапустить генерацию целиком с теми же данными (тот же заголовок и креатив)"
+          ${busy ? 'disabled' : ''}><span class="ico">↻</span>Генерация</button>
+      </span>
     </div>`;
   }).join('');
   fileList.querySelectorAll('.file-item').forEach(el => {

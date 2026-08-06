@@ -223,20 +223,27 @@ body {
 .file-item {
   font-size: 0.75rem; font-weight: 500; padding: 8px 10px; margin-bottom: 4px; border-radius: var(--radius-sm);
   cursor: pointer; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-body); transition: background var(--t-fast), border-color var(--t-fast);
-  display: flex; align-items: center; gap: 8px;
+  /* Две кнопки перезапуска в узкой колонке не помещаются в одну строку с именем — разрешаем
+     перенос, иначе имя файла выдавливается полностью. */
+  display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap;
 }
 .file-item:hover { background: var(--bg-cream); border-color: var(--border-hover); }
 .file-item.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--text-body); font-weight: 600; }
 .file-item.processing { color: var(--accent-amber); cursor: default; }
 .file-item-name {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1 1 70px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.file-item-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
+/* Иконка у обеих кнопок одна (↻) — различаются подписью: что именно перезапускаем. */
 .file-item-retry {
-  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg-surface);
-  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center;
-  justify-content: center; transition: all 0.15s ease;
+  flex-shrink: 0; height: 22px; padding: 0 7px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color); background: var(--bg-surface);
+  color: var(--text-secondary); cursor: pointer; font-family: var(--font-sans); font-size: 0.62rem;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
-.file-item-retry:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.file-item-retry .ico { font-size: 0.75rem; line-height: 1; }
+.file-item-retry:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
 .file-item-retry:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
@@ -600,7 +607,9 @@ btnRun.addEventListener('click', async () => {
         name: `s${si + 1}-${ref.name.replace(/\.[^.]+$/, '')}-competitor-static.png`,
         blob, blobUrl, type: 'image',
         savezoneUrl: data.savezone_url, // pre-outpaint 3:4 — reused by "перегенерировать аутпеинт"
-        outpainting: false,
+        // Контекст для кнопки «Генерация»: всё, что нужно, чтобы повторить ровно этот вызов.
+        srcText: sc.text.trim(), refFile: ref.file, refName: ref.name, model: selectedModel,
+        busy: null,
       });
       renderOutputFiles();
     } catch (e) {
@@ -628,10 +637,18 @@ btnRun.addEventListener('click', async () => {
 // ── Output / Preview (та же логика, что и в audiopng, только всегда картинки) ──
 function renderOutputFiles() {
   fileList.innerHTML = outputFiles.map((f, i) => `
-    <div class="file-item${f.outpainting ? ' processing' : ''}" data-idx="${i}">
+    <div class="file-item${f.busy ? ' processing' : ''}" data-idx="${i}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span class="file-item-name">${f.outpainting ? 'Перегенерирую аутпеинт…' : esc(f.name)}</span>
-      <button class="file-item-retry" data-idx="${i}" title="Перегенерировать только аутпеинт" ${f.outpainting ? 'disabled' : ''}>↻</button>
+      <span class="file-item-name">${f.busy === 'outpaint' ? 'Перегенерирую аутпеинт…'
+        : f.busy === 'gen' ? 'Перегенерирую целиком…' : esc(f.name)}</span>
+      <span class="file-item-actions">
+        <button class="file-item-retry" data-act="outpaint" data-idx="${i}"
+          title="Перегенерировать только аутпеинт: берётся уже готовая 3:4-картинка, платная генерация не повторяется"
+          ${f.busy || !f.savezoneUrl ? 'disabled' : ''}><span class="ico">↻</span>Аутпеинт</button>
+        <button class="file-item-retry" data-act="gen" data-idx="${i}"
+          title="Перезапустить генерацию целиком с теми же данными (тот же текст, референс и модель)"
+          ${f.busy || !f.srcText || !f.refFile ? 'disabled' : ''}><span class="ico">↻</span>Генерация</button>
+      </span>
     </div>
   `).join('');
   fileList.querySelectorAll('.file-item').forEach(el => {
@@ -643,7 +660,8 @@ function renderOutputFiles() {
   fileList.querySelectorAll('.file-item-retry').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      retryOutpaint(+btn.dataset.idx);
+      if (btn.dataset.act === 'gen') retryGeneration(+btn.dataset.idx);
+      else retryOutpaint(+btn.dataset.idx);
     });
   });
   if (outputFiles.length === 0) {
@@ -666,8 +684,8 @@ function previewOutput(idx) {
 // сохранённый pre-outpaint savezone_url, платная генерация моделью не повторяется.
 async function retryOutpaint(idx) {
   const entry = outputFiles[idx];
-  if (!entry || !entry.savezoneUrl || entry.outpainting) return;
-  entry.outpainting = true;
+  if (!entry || !entry.savezoneUrl || entry.busy) return;
+  entry.busy = 'outpaint';
   renderOutputFiles();
   try {
     const savezoneRes = await fetch(entry.savezoneUrl);
@@ -686,7 +704,39 @@ async function retryOutpaint(idx) {
     console.error('retry outpaint failed', e);
     alert('Не удалось перегенерировать аутпеинт: ' + e.message);
   } finally {
-    entry.outpainting = false;
+    entry.busy = null;
+    renderOutputFiles();
+  }
+}
+
+// Полный перезапуск одной картинки: тот же исходный текст, тот же референс и та же модель,
+// что и в первый раз — они сохранены прямо в записи результата, поэтому перезапуск работает
+// и после удаления исходников из колонок 1/2, и после перезагрузки страницы.
+async function retryGeneration(idx) {
+  const entry = outputFiles[idx];
+  if (!entry || entry.busy || !entry.srcText || !entry.refFile) return;
+  entry.busy = 'gen';
+  renderOutputFiles();
+  try {
+    const fd = new FormData();
+    fd.append('text', entry.srcText);
+    fd.append('model', entry.model || selectedModel);
+    fd.append('file', entry.refFile);
+    const startRes = await fetch('api/generate', { method: 'POST', body: fd });
+    if (!startRes.ok) throw new Error((await startRes.json()).detail || 'Generation failed');
+    const { job_id } = await startRes.json();
+    const data = await pollJob(job_id);
+    const imgRes = await fetch(data.url);
+    const blob = await imgRes.blob();
+    URL.revokeObjectURL(entry.blobUrl);
+    entry.blob = blob;
+    entry.blobUrl = URL.createObjectURL(blob);
+    entry.savezoneUrl = data.savezone_url;   // новый pre-outpaint исходник для кнопки «Аутпеинт»
+  } catch (e) {
+    console.error('retry generation failed', e);
+    alert('Не удалось перезапустить генерацию: ' + e.message);
+  } finally {
+    entry.busy = null;
     renderOutputFiles();
   }
 }
@@ -740,7 +790,12 @@ function collectState() {
     })),
     references: references.map(r => ({ name: r.name, file: r.file })),
     selectedModel,
-    outputs: outputFiles.map(f => ({ name: f.name, blob: f.blob, savezoneUrl: f.savezoneUrl })),
+    // refFile — тот же File-объект, что лежит в references: structured clone внутри одной
+    // записи сохранит его один раз, дублирования на диске не будет.
+    outputs: outputFiles.map(f => ({
+      name: f.name, blob: f.blob, savezoneUrl: f.savezoneUrl,
+      srcText: f.srcText, refFile: f.refFile, refName: f.refName, model: f.model,
+    })),
   };
 }
 
@@ -758,7 +813,9 @@ async function restoreState(st) {
   if (st.outputs && st.outputs.length) {
     outputFiles = st.outputs.map(f => ({
       id: uid(), name: f.name, blob: f.blob, blobUrl: URL.createObjectURL(f.blob),
-      type: 'image', savezoneUrl: f.savezoneUrl, outpainting: false,
+      type: 'image', savezoneUrl: f.savezoneUrl,
+      srcText: f.srcText, refFile: f.refFile, refName: f.refName, model: f.model,
+      busy: null,
     }));
     renderOutputFiles();
   }
