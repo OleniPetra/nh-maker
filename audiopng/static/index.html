@@ -736,6 +736,41 @@ body {
   cursor: pointer;
 }
 
+/* Длительность при музыке без голоса — см. #musicOnlyDuration в разметке. */
+.duration-group {
+  display: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+.duration-group.show { display: block; }
+.duration-group label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.duration-row { display: flex; align-items: center; gap: 6px; }
+.duration-row input {
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  outline: none;
+}
+.duration-row input:focus { border-color: var(--accent); }
+.duration-row .unit { font-size: 0.68rem; color: var(--text-muted); flex-shrink: 0; }
+.duration-hint { font-size: 0.62rem; color: var(--text-muted); line-height: 1.35; margin-top: 5px; }
+
 /* Column 5: Preview & Output */
 .preview-area {
   flex: 1;
@@ -1030,6 +1065,16 @@ body {
         <label>Vol</label>
         <input type="range" id="musicVol" min="0" max="100" value="100">
       </div>
+      <!-- Видно только когда загружена ОДНА музыка без голоса: тогда длину задавать нечем.
+           С голосом длительность всегда берётся из него (см. mixAudio). -->
+      <div class="duration-group" id="musicOnlyDuration">
+        <label for="musicDurationInput">Длительность</label>
+        <div class="duration-row">
+          <input type="number" id="musicDurationInput" min="1" max="600" step="1" value="30">
+          <span class="unit">сек</span>
+        </div>
+        <div class="duration-hint">Музыка короче — зациклится, длиннее — обрежется.</div>
+      </div>
     </div>
   </div>
 
@@ -1131,6 +1176,7 @@ const voiceLabel = $('voiceLabel');
 const voiceVol = $('voiceVol');
 const musicDrop = $('musicDrop'); const musicInput = $('musicInput');
 const musicLabel = $('musicLabel');
+const musicOnlyDuration = $('musicOnlyDuration'), musicDurationInput = $('musicDurationInput');
 const musicVol = $('musicVol');
 const btnMerge = $('btnMerge'); const btnDownload = $('btnDownload');
 const btnRunImagesOnly = $('btnRunImagesOnly');
@@ -1207,6 +1253,11 @@ let voiceFile = null;
 let musicFile = null;
 let voiceVolume = 100;
 let musicVolume = 100;
+// Длительность для случая «только музыка»: голоса нет, и взять длину видео больше неоткуда.
+// Полная длина музыкального трека тут плохой ориентир — фоновый бед на 3 минуты дал бы
+// трёхминутное видео. Поэтому спрашиваем явно, по умолчанию 30 секунд.
+const DEFAULT_MUSIC_ONLY_SEC = 30;
+let musicOnlySeconds = DEFAULT_MUSIC_ONLY_SEC;
 let outputFiles = [];   // { name, blob, blobUrl }
 
 // Сессия создаётся в конце файла (ей нужны уже объявленные функции сбора/восстановления),
@@ -1512,10 +1563,16 @@ async function retryOutpaint(id) {
 }
 
 // ── Audio ───────────────────────────────────────────────────
+// Поле длительности нужно ровно в одной ситуации — музыка есть, голоса нет.
+function updateDurationField() {
+  musicOnlyDuration.classList.toggle('show', !!musicFile && !voiceFile);
+}
+
 function setVoiceFile(file) {
   voiceFile = file;
   voiceLabel.textContent = '✓ ' + file.name;
   voiceDrop.classList.add('loaded');
+  updateDurationField();
   updateButtons();
 }
 
@@ -1523,8 +1580,14 @@ function setMusicFile(file) {
   musicFile = file;
   musicLabel.textContent = '✓ ' + file.name;
   musicDrop.classList.add('loaded');
+  updateDurationField();
   updateButtons();
 }
+
+musicDurationInput.addEventListener('input', () => {
+  const v = parseFloat(musicDurationInput.value);
+  if (Number.isFinite(v) && v > 0) musicOnlySeconds = v;
+});
 
 function handleAudioDrop(type, files) {
   const f = Array.from(files).find(x => 
@@ -1970,13 +2033,15 @@ async function getTemplateBlob(id) {
 }
 
 // Audio mixing via Web Audio API. Video length is ALWAYS Voice's duration (narration is what
-// the visuals are timed to), falling back to Music's duration only when there's no Voice at
-// all. Music is the background bed: if shorter than Voice it loops to fill the gap; if LONGER
-// than Voice it gets cut off exactly at Voice's end (the OfflineAudioContext render length is
-// fixed to totalLen, so a looping source is simply truncated there — no extra logic needed).
+// the visuals are timed to). With Music only and no Voice there is nothing to derive a length
+// from, so the user sets it explicitly (musicOnlySeconds, default 30s) — the track's own length
+// is a poor default there, a 3-minute bed would yield a 3-minute video. Music is the background
+// bed: if shorter than the target it loops to fill the gap; if LONGER it gets cut off exactly at
+// the end (the OfflineAudioContext render length is fixed to totalLen, so a looping source is
+// simply truncated there — no extra logic needed).
 const AUDIO_SAMPLE_RATE = 48000; // AAC delivery spec: 48 kHz
 
-async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
+async function mixAudio(voiceFile, musicFile, voiceVol, musicVol, musicOnlyLen) {
   const decode = async (file) => {
     const buf = await file.arrayBuffer();
     return new AudioContext().decodeAudioData(buf);
@@ -1989,7 +2054,9 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol) {
 
   const voiceLen = voiceBuf ? voiceBuf.duration : 0;
   const musicLen = musicBuf ? musicBuf.duration : 0;
-  const totalLen = voiceBuf ? voiceLen : musicLen; // Voice drives length; Music-only falls back to Music's own length
+  // Голос задаёт длину; без него — заданная пользователем (на всякий случай откатываемся
+  // на длину самого трека, если значение почему-то не пришло).
+  const totalLen = voiceBuf ? voiceLen : (musicOnlyLen > 0 ? musicOnlyLen : musicLen);
   const sampleRate = AUDIO_SAMPLE_RATE;
 
   const offlineCtx = new OfflineAudioContext(2, Math.ceil(totalLen * sampleRate), sampleRate);
@@ -2258,7 +2325,7 @@ btnMerge.addEventListener('click', async () => {
 
   try {
     updateProgress('Mixing audio tracks…', 0);
-    const mixedAudio = await mixAudio(voiceFile, musicFile, voiceVolume, musicVolume);
+    const mixedAudio = await mixAudio(voiceFile, musicFile, voiceVolume, musicVolume, musicOnlySeconds);
 
     const { logoBlobFixed, discBlobFixed } = await resolveFixedOverlayBlobs();
 
@@ -2476,7 +2543,7 @@ function collectState() {
     })),
     logoTpl: overlayState.logo.selectedTemplateId,
     discTpl: overlayState.disclaimer.selectedTemplateId,
-    voiceFile, musicFile, voiceVolume, musicVolume,
+    voiceFile, musicFile, voiceVolume, musicVolume, musicOnlySeconds,
     genPrompt: genPrompt.value,
     genModel: genModel.value,
     outputs: outputFiles.map(f => ({ name: f.name, blob: f.blob, type: f.type })),
@@ -2499,6 +2566,8 @@ async function restoreState(st) {
   if (st.musicFile) setMusicFile(st.musicFile);
   if (typeof st.voiceVolume === 'number') { voiceVolume = st.voiceVolume; voiceVol.value = st.voiceVolume; }
   if (typeof st.musicVolume === 'number') { musicVolume = st.musicVolume; musicVol.value = st.musicVolume; }
+  if (typeof st.musicOnlySeconds === 'number') { musicOnlySeconds = st.musicOnlySeconds; musicDurationInput.value = st.musicOnlySeconds; }
+  updateDurationField();
   if (st.genPrompt) genPrompt.value = st.genPrompt;
   if (st.genModel && genModel.querySelector(`option[value="${st.genModel}"]`)) genModel.value = st.genModel;
 
