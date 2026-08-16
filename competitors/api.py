@@ -109,23 +109,49 @@ GENERATION_MODELS = {
 async def api_generation_models():
     return [{"id": k, "name": v["name"]} for k, v in GENERATION_MODELS.items()]
 
-# Deliberately DOES tell the model what to leave out (brand mark, disclaimer) — unlike the
-# outpaint prompt elsewhere in this app, which avoids naming anything to exclude (Flux Fill reacts
-# badly to negation). Tested directly against all three models here: the instruction below reliably
-# keeps the source reference's own brand mark out of the result, and these image-edit models don't
-# show the same "renders whatever it's told not to" failure mode Flux Fill does.
+# Промпт для edit-модели. Логика прежняя: текст — наш (его уже извлекла vision-модель в
+# колонке 1 и он приходит сюда готовой строкой), визуальный язык — с приложенного референса.
+#
+# Адаптирован из внешнего промпта, где на входе было ТРИ картинки (база с контентом, референс
+# стиля, карта safe-zone) и модель просили сначала выписать Design Instructions, а затем вернуть
+# готовый промпт текстом. Здесь не нужно ни то, ни другое: картинка на входе ровно одна и она
+# всегда только референс стиля, а на другом конце стоит image-edit-модель, которая должна сразу
+# нарисовать результат, а не написать промпт. Поэтому разбор стиля сформулирован как то, что
+# модель делает про себя перед тем, как рисовать. Про safe-zone здесь тоже нечего сказать: в
+# этом пайплайне кадрирование решает аутпеинт уже после генерации (см. _run_outpaint).
+#
+# Запреты («не переноси логотип», «без дисклеймера») оставлены намеренно — в отличие от промпта
+# аутпеинта, где негативных формулировок избегают: Flux Fill склонен рисовать ровно то, что ему
+# запретили, а эти три edit-модели такого не показывают (проверялось на всех трёх).
 GEN_PROMPT_TEMPLATE = (
-    "Generate a vertical advertising creative that uses the following on-image text exactly as "
-    "given, sized and placed to match the reference's typographic hierarchy:\n\n\"{text}\"\n\n"
-    "Adopt the visual style of the attached reference image — its color palette, background "
-    "texture, imagery treatment, and marketing layout conventions (badges, icons, step markers, "
-    "connector lines, CTA button styling, card or grid structure). Re-interpret every visual "
-    "element to fit and reinforce the meaning of the given text; do not carry over any of the "
-    "reference's own wording, numbers, or claims — only its visual system. Keep the reference's "
-    "overall composition and information hierarchy where it fits the new text naturally, adapting "
-    "proportions rather than forcing a literal copy. Do not include any logo, wordmark, or brand "
-    "mark from the reference image, and do not add a legal disclaimer or fine print. Vertical "
-    "orientation, 3:4 aspect ratio."
+    "You are an expert visual style analyst and designer. The attached image is a STYLE "
+    "REFERENCE ONLY. Study it to derive its design language: mood, typography, colour palette, "
+    "visual hierarchy, layout principles, background treatment, decorative elements and overall "
+    "design philosophy. Take from it only these reusable design principles — never its content: "
+    "none of its wording, numbers or claims, and none of its objects, people, products, brands "
+    "or logos.\n\n"
+    "Using that design language as creative direction, build a vertical advertising creative "
+    "that carries the following text:\n\n\"{text}\"\n\n"
+    "TEXT AND INFORMATION — preserve strictly:\n"
+    "- Use every line of the given text verbatim: same words, same language, same spelling. You "
+    "may reposition, regroup and restyle it freely, but never rewrite, translate, shorten, "
+    "invent or remove it. Render each line exactly once — no line may appear twice anywhere "
+    "in the creative.\n"
+    "- The given lines are the ONLY text in the creative. Do not add any other text: no extra "
+    "headings, badges, step or day labels, captions, taglines or fine print, and nothing echoing "
+    "the reference's own labels or numbering.\n"
+    "- The lines arrive in reading order — headline first, then subheadline, body copy, list or "
+    "step items, and finally the call to action. Preserve the logical relationships between "
+    "them: what belongs with what, the order of any sequence, and how items group.\n\n"
+    "DESIGN — build it freely:\n"
+    "- Choose the layout, grid, container shapes, background, supporting graphics, decorative "
+    "elements and type treatment that serve this text best, driven by the reference\'s design "
+    "language rather than by its own composition. The number of columns or rows, the shape of "
+    "cards and the grouping of blocks are yours to decide.\n"
+    "- Express importance through a fresh visual hierarchy built for this text.\n"
+    "- Do not include any logo, wordmark or brand mark, and do not add a legal disclaimer or "
+    "fine print.\n\n"
+    "Vertical orientation, 3:4 aspect ratio."
 )
 
 async def _do_generate(text: str, model: str, ref_bytes: bytes, ref_content_type: str, ref_filename: str) -> dict:
