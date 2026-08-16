@@ -81,26 +81,27 @@ async def api_extract_text(file: UploadFile = File(...)):
     text = await extract_text_from_image(content, file.content_type or "image/png")
     return {"text": text}
 
-# Generation models: each is a FAL "edit" endpoint that takes prompt + one or more reference
-# image_urls (image-to-image / style-conditioned generation) — NOT the plain text-to-image
-# endpoints audiopng's AI Gen uses, since here the reference image's visual style is a required
-# input, not just a text description of it.
+# Модели генерации — теперь ЧИСТО text-to-image: картинку-референс они не видят вовсе.
+# Раньше здесь стояли /edit-эндпоинты, которым референс передавался напрямую, и они тянули из
+# него не только стиль, но и содержимое: в тестах модель дописывала подписи вроде
+# "Day 1: AI Tools Overview", подсмотренные у референса. Теперь стиль сначала переводится в
+# слова отдельным LLM-шагом (см. STYLE_ANALYSIS_PROMPT), а t2i-модель работает только с текстом
+# и физически не может ничего скопировать.
 GENERATION_MODELS = {
     "nano-banana-2": {
         "name": "Nano Banana 2",
-        "edit_url": "https://fal.run/fal-ai/nano-banana-2/edit",
+        "t2i_url": "https://fal.run/fal-ai/nano-banana-2",
         "payload_extra": {"aspect_ratio": "3:4", "resolution": "1K"},
     },
     "nano-banana-pro": {
         "name": "Nano Banana Pro",
-        "edit_url": "https://fal.run/fal-ai/nano-banana-pro/edit",
+        "t2i_url": "https://fal.run/fal-ai/nano-banana-pro",
         "payload_extra": {"aspect_ratio": "3:4", "resolution": "1K"},
     },
     "gpt-image-2": {
         "name": "GPT Image 2",
-        "edit_url": "https://fal.run/openai/gpt-image-2/edit",
-        # gpt-image-2/edit has no aspect_ratio enum — closest 3:4 via explicit width/height
-        # (multiples of 16), matching the pattern audiopng's own gpt-image-2 payload already uses.
+        "t2i_url": "https://fal.run/openai/gpt-image-2",
+        # у gpt-image-2 нет enum aspect_ratio — ближайшее 3:4 явными размерами, кратными 16
         "payload_extra": {"image_size": {"width": 864, "height": 1152}, "quality": "high"},
     },
 }
@@ -109,65 +110,93 @@ GENERATION_MODELS = {
 async def api_generation_models():
     return [{"id": k, "name": v["name"]} for k, v in GENERATION_MODELS.items()]
 
-# Промпт для edit-модели. Логика прежняя: текст — наш (его уже извлекла vision-модель в
-# колонке 1 и он приходит сюда готовой строкой), визуальный язык — с приложенного референса.
-#
-# Адаптирован из внешнего промпта, где на входе было ТРИ картинки (база с контентом, референс
-# стиля, карта safe-zone) и модель просили сначала выписать Design Instructions, а затем вернуть
-# готовый промпт текстом. Здесь не нужно ни то, ни другое: картинка на входе ровно одна и она
-# всегда только референс стиля, а на другом конце стоит image-edit-модель, которая должна сразу
-# нарисовать результат, а не написать промпт. Поэтому разбор стиля сформулирован как то, что
-# модель делает про себя перед тем, как рисовать. Про safe-zone здесь тоже нечего сказать: в
-# этом пайплайне кадрирование решает аутпеинт уже после генерации (см. _run_outpaint).
-#
-# Запреты («не переноси логотип», «без дисклеймера») оставлены намеренно — в отличие от промпта
-# аутпеинта, где негативных формулировок избегают: Flux Fill склонен рисовать ровно то, что ему
-# запретили, а эти три edit-модели такого не показывают (проверялось на всех трёх).
+# Модель, которая смотрит на референс и переводит его стиль в слова. Vision обязателен.
+STYLE_MODEL = "google/gemini-3.7-flash"
+
+# Шаг 1 — разбор стиля. Просим ТОЛЬКО Design Instructions, а финальный t2i-промпт собираем
+# из них кодом ниже. В промпте-доноре LLM просили вернуть уже собранный промпт целиком, но
+# здесь это лишний риск: модель должна была бы дословно переписать весь наш текст внутрь
+# ответа, и любая её вольность (сокращение строки, markdown-обёртка, комментарий) молча
+# испортила бы креатив. Так LLM отвечает за то, в чём она сильна — за описание стиля, — а
+# неизменяемые правила и сам текст подставляет код.
+STYLE_ANALYSIS_PROMPT = (
+    "You are an expert visual style analyst. Analyse the attached image and describe ONLY its "
+    "design characteristics: mood, style, typography, colour palette, visual hierarchy, layout "
+    "principles, background style, decorative elements and overall design philosophy.\n\n"
+    "Do not describe the image's content, objects, text, people, products, brands or logos. "
+    "Extract only reusable design principles — the result must be usable to design a completely "
+    "different creative on a different topic.\n\n"
+    "Reply with the design description itself and nothing else: no preamble, no headings, no "
+    "markdown, no bullet list, no commentary. Aim for a dense paragraph of 120-200 words."
+)
+
+# Шаг 2 — сборка промпта для t2i-модели. Design Instructions от LLM плюс наш текст плюс
+# неизменяемые правила. Референса t2i-модель не видит, поэтому запреты «не копируй логотип
+# референса» больше не нужны — скопировать нечего.
 GEN_PROMPT_TEMPLATE = (
-    "You are an expert visual style analyst and designer. The attached image is a STYLE "
-    "REFERENCE ONLY. Study it to derive its design language: mood, typography, colour palette, "
-    "visual hierarchy, layout principles, background treatment, decorative elements and overall "
-    "design philosophy. Take from it only these reusable design principles — never its content: "
-    "none of its wording, numbers or claims, and none of its objects, people, products, brands "
-    "or logos.\n\n"
-    "Using that design language as creative direction, build a vertical advertising creative "
-    "that carries the following text:\n\n\"{text}\"\n\n"
-    "TEXT AND INFORMATION — preserve strictly:\n"
-    "- Use every line of the given text verbatim: same words, same language, same spelling. You "
-    "may reposition, regroup and restyle it freely, but never rewrite, translate, shorten, "
-    "invent or remove it. Render each line exactly once — no line may appear twice anywhere "
-    "in the creative.\n"
-    "- The given lines are the ONLY text in the creative. Do not add any other text: no extra "
-    "headings, badges, step or day labels, captions, taglines or fine print, and nothing echoing "
-    "the reference's own labels or numbering.\n"
+    "Design a vertical advertising creative.\n\n"
+    "VISUAL DIRECTION — follow this design language:\n{design}\n\n"
+    "TEXT — the creative carries exactly these lines:\n\n\"{text}\"\n\n"
+    "TEXT RULES:\n"
+    "- Render every line verbatim: same words, same language, same spelling. Arrange, group and "
+    "style them freely, but never rewrite, translate, shorten, invent or remove them.\n"
+    "- Render each line exactly once — no line may appear twice anywhere in the creative.\n"
+    "- These lines are the ONLY text in the creative. Add no other text: no extra headings, "
+    "badges, step or day labels, captions, taglines or fine print.\n"
     "- The lines arrive in reading order — headline first, then subheadline, body copy, list or "
-    "step items, and finally the call to action. Preserve the logical relationships between "
-    "them: what belongs with what, the order of any sequence, and how items group.\n\n"
-    "DESIGN — build it freely:\n"
-    "- Choose the layout, grid, container shapes, background, supporting graphics, decorative "
-    "elements and type treatment that serve this text best, driven by the reference\'s design "
-    "language rather than by its own composition. The number of columns or rows, the shape of "
-    "cards and the grouping of blocks are yours to decide.\n"
-    "- Express importance through a fresh visual hierarchy built for this text.\n"
+    "step items, and finally the call to action. Preserve how they group and any sequence order.\n\n"
+    "DESIGN RULES:\n"
+    "- Choose the layout, grid, container shapes, background, supporting graphics and decorative "
+    "elements that serve this text best, expressed through the visual direction above.\n"
+    "- Build a clear visual hierarchy: the headline dominates, the call to action reads as the "
+    "final action.\n"
     "- Do not include any logo, wordmark or brand mark, and do not add a legal disclaimer or "
     "fine print.\n\n"
     "Vertical orientation, 3:4 aspect ratio."
 )
 
+async def analyse_style(client: httpx.AsyncClient, ref_bytes: bytes, content_type: str) -> str:
+    """Переводит визуальный стиль референса в текстовое описание (шаг 1 пайплайна)."""
+    api_key = _require_openrouter_key()
+    b64 = base64.b64encode(ref_bytes).decode()
+    resp = await client.post(
+        OPENROUTER_URL,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": STYLE_MODEL,
+            "temperature": 0.4,   # немного свободы: это творческое описание, а не извлечение фактов
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": STYLE_ANALYSIS_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{b64}"}},
+                ],
+            }],
+        },
+    )
+    if resp.status_code != 200:
+        raise HTTPException(resp.status_code, detail=f"Style analysis failed: {resp.text}")
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 async def _do_generate(text: str, model: str, ref_bytes: bytes, ref_content_type: str, ref_filename: str) -> dict:
-    """The actual (slow) work — see audiopng._start_async_job for why this runs in the background
-    instead of directly in the request handler (GPT Image 2 in particular can take 2-3 minutes,
-    well past what Cloudflare's edge lets a single proxied HTTP request run for)."""
+    """Пайплайн из двух шагов: LLM переводит стиль референса в слова, затем t2i-модель рисует
+    креатив по одному лишь тексту. Референс до генератора картинки не доходит вовсе.
+
+    Запускается фоновой задачей — см. audiopng._start_async_job: теперь шагов два, и суммарно
+    это тем более дольше того, что Cloudflare разрешает держать одному HTTP-запросу."""
     if model not in GENERATION_MODELS:
         raise HTTPException(400, f"Unknown model: {model}")
     cfg = GENERATION_MODELS[model]
 
     async with httpx.AsyncClient(timeout=280) as client:
-        ref_url = await audiopng._fal_storage_upload(client, ref_bytes, ref_content_type, ref_filename)
+        design = await analyse_style(client, ref_bytes, ref_content_type)
+        prompt = GEN_PROMPT_TEMPLATE.format(design=design, text=text.strip())
+        print(f"[competitors] style={STYLE_MODEL} model={model} design={len(design)} chars", flush=True)
 
-        prompt = GEN_PROMPT_TEMPLATE.format(text=text.strip())
-        payload = {"prompt": prompt, "image_urls": [ref_url], **cfg["payload_extra"]}
-        resp = await client.post(cfg["edit_url"], json=payload, headers={"Authorization": f"Key {audiopng.FAL_KEY}"})
+        payload = {"prompt": prompt, **cfg["payload_extra"]}
+        resp = await client.post(cfg["t2i_url"], json=payload,
+                                 headers={"Authorization": f"Key {audiopng.FAL_KEY}"})
         if resp.status_code != 200:
             raise HTTPException(resp.status_code, detail=f"Generation failed: {resp.text}")
         savezone_url = audiopng._extract_image_url(resp.json())
@@ -182,7 +211,10 @@ async def _do_generate(text: str, model: str, ref_bytes: bytes, ref_content_type
             client, img_resp.content, COMP_SAVEZONE_W, COMP_SAVEZONE_H, COMP_OUTPAINT_W, COMP_OUTPAINT_H
         )
 
-    return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method}
+    # design и prompt возвращаем наружу: когда результат выйдет неудачным, по ним видно,
+    # на каком из двух шагов всё пошло не так — на разборе стиля или на отрисовке.
+    return {"url": final_url, "savezone_url": savezone_url, "outpaint_method": method,
+            "design": design, "prompt": prompt}
 
 @router.post("/api/generate")
 async def api_generate(
