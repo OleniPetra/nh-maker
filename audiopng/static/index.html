@@ -957,10 +957,10 @@ body {
     <!-- Upload mode: ready-to-use 9:16 videos/images, used as-is -->
     <div id="uploadSection">
       <div class="dropzone" id="imgDropzone">
-        <input type="file" id="imgInput" multiple accept="image/*">
+        <input type="file" id="imgInput" multiple accept="image/*,video/mp4,video/quicktime,video/webm">
         <span class="dropzone-icon-wrap"><svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
         <div>Drop images here</div>
-        <span style="font-size:0.68rem;color:var(--text-muted)">PNG, JPG, WebP</span>
+        <span style="font-size:0.68rem;color:var(--text-muted)">PNG, JPG, WebP, MP4</span>
       </div>
     </div>
 
@@ -1284,6 +1284,61 @@ function fmtSize(bytes) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
+// ── Видео как источник кадров ───────────────────────────────
+// Кадры достаём перемоткой <video> + drawImage, а не WebCodecs-декодером: декодеру нужен
+// демуксер MP4 отдельной библиотекой, а в проекте нет сборщика. Перемотка идёт строго вперёд
+// небольшими шагами (кроме прыжка в начало на стыке зацикливания), так что браузер декодирует
+// последовательно и это заметно быстрее случайного seek.
+function isVideoFile(f) {
+  return !!f && (f.type.startsWith('video/') || /\.(mp4|m4v|mov|webm)$/i.test(f.name || ''));
+}
+
+function loadVideoElement(file) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement('video');
+    v.preload = 'auto';
+    v.muted = true;          // без этого браузер может не отдать кадры без жеста пользователя
+    v.playsInline = true;
+    v.src = URL.createObjectURL(file);
+    v.onloadedmetadata = () => resolve(v);
+    v.onerror = () => reject(new Error('не удалось открыть видеофайл'));
+  });
+}
+
+function seekVideo(v, t) {
+  return new Promise((resolve, reject) => {
+    // Уже на нужном кадре и он декодирован — событие 'seeked' не придёт, ждать нечего.
+    if (v.readyState >= 2 && Math.abs(v.currentTime - t) < 1e-3) return resolve();
+    const done = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new Error('перемотка видео не удалась')); };
+    const cleanup = () => { v.removeEventListener('seeked', done); v.removeEventListener('error', fail); };
+    v.addEventListener('seeked', done);
+    v.addEventListener('error', fail);
+    v.currentTime = t;
+  });
+}
+
+// Первый кадр — он же превью в очереди и подложка в колонках 3.1/3.2.
+async function extractPoster(file) {
+  const v = await loadVideoElement(file);
+  try {
+    const dur = Number.isFinite(v.duration) ? v.duration : 0;
+    await seekVideo(v, Math.min(0.1, dur / 2));
+    const c = new OffscreenCanvas(v.videoWidth, v.videoHeight);
+    c.getContext('2d').drawImage(v, 0, 0);
+    const blob = await c.convertToBlob({ type: 'image/png' });
+    return { blob, width: v.videoWidth, height: v.videoHeight, duration: dur };
+  } finally {
+    URL.revokeObjectURL(v.src);
+    v.src = '';
+  }
+}
+
+function fmtDuration(sec) {
+  const s = Math.round(sec || 0);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 // ── Drag & Drop ─────────────────────────────────────────────
 function setupDrop(el, inputEl, onFiles) {
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
@@ -1375,9 +1430,12 @@ function createPlaceholderEntry(name, blobUrl, size, statusLabel) {
 function finalizeEntry(id, file, displayName) {
   const entry = images.find(i => i.id === id);
   if (!entry) return; // пользователь уже убрал карточку, пока шла обработка
-  URL.revokeObjectURL(entry.blobUrl);
   entry.file = file;
-  entry.blobUrl = URL.createObjectURL(file);
+  // У видео blobUrl — это уже готовый постер (mp4 в <img> не отрисовать), его не трогаем.
+  if (!entry.isVideo) {
+    URL.revokeObjectURL(entry.blobUrl);
+    entry.blobUrl = URL.createObjectURL(file);
+  }
   entry.size = file.size;
   entry.name = displayName || file.name;
   entry.status = 'ready';
@@ -1418,10 +1476,33 @@ async function addImages(files, retryMeta) {
 // там всегда нужен ровно 1080x1920, независимо от того, что сейчас выбрано в этом дропдауне).
 async function addImagesWithRatio(files) {
   const isAuto = selectedUploadRatio === 'auto';
-  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/') || isVideoFile(f));
   const created = [];
   for (const f of imgFiles) {
     if (images.length >= MAX_IMAGES) break;
+
+    // Видео не растягиваем и не пересобираем на загрузке — кадры масштабируются уже при
+    // рендере. Здесь только достаём постер, размеры и длительность.
+    if (isVideoFile(f)) {
+      const entry = createPlaceholderEntry(f.name, '', f.size, 'Читаю видео…');
+      try {
+        const poster = await extractPoster(f);
+        entry.isVideo = true;
+        entry.duration = poster.duration;
+        entry.targetW = isAuto ? poster.width : UPLOAD_RATIOS[selectedUploadRatio].w;
+        entry.targetH = isAuto ? poster.height : UPLOAD_RATIOS[selectedUploadRatio].h;
+        entry.blobUrl = URL.createObjectURL(poster.blob);   // постер, чтобы <img> в очереди показал кадр
+        // Постер кладём в кэш битмапов под ключом самого mp4: тогда превью в колонках 3.1/3.2
+        // рисуются существующим кодом без единой правки — он берёт битмап через getCachedBitmap.
+        bitmapCache.set(f, await createImageBitmap(poster.blob));
+        finalizeEntry(entry.id, f, f.name);
+      } catch (e) {
+        console.error('video load failed', e);
+        failEntry(entry.id);
+      }
+      created.push(entry);
+      continue;
+    }
     const blobUrl = URL.createObjectURL(f);
     const entry = createPlaceholderEntry(f.name, blobUrl, f.size, isAuto ? 'Определяю размер…' : `Масштабирование до ${UPLOAD_RATIOS[selectedUploadRatio].w}×${UPLOAD_RATIOS[selectedUploadRatio].h}…`);
     created.push(entry);
@@ -1468,7 +1549,9 @@ function renderImages() {
       </div>
       <div class="info">
         <span class="name">${esc(img.name)}</span>
-        <span class="size">${img.status === 'processing' ? (img.statusLabel || 'Обработка…') : fmtSize(img.size)}</span>
+        <span class="size">${img.status === 'processing' ? (img.statusLabel || 'Обработка…')
+          : img.isVideo ? `MP4 · ${fmtDuration(img.duration)} · ${fmtSize(img.size)}`
+          : fmtSize(img.size)}</span>
       </div>
       ${img.retryKind && img.status === 'ready' ? `<button class="retry" data-id="${img.id}" title="Повторить только аутпеинт">↻</button>` : ''}
       <button class="del" data-id="${img.id}">✕</button>
@@ -2088,29 +2171,26 @@ async function mixAudio(voiceFile, musicFile, voiceVol, musicVol, musicOnlyLen) 
 // Draws the base image (contain-fit, black letterbox) + overlays (logo/disclaimer) onto a
 // 1080x1920 canvas. Shared by video rendering (renderOneVideo) and the audio-less image
 // export (renderOneImage) — one drawing implementation, two output paths.
-async function composeOverlayCanvas(imgFile, overlays, width, height) {
-  const imgBitmap = await createImageBitmap(imgFile);
-
-  const overlayBitmaps = await Promise.all(overlays.map(async o => {
+// Наложение оверлеев вынесено в отдельные функции: их одинаково используют статичный путь
+// (собрать холст один раз) и видео (пересобирать холст на каждый кадр).
+async function loadOverlayBitmaps(overlays) {
+  return Promise.all(overlays.map(async o => {
     if (!o.blob) return null;
     return { bitmap: await createImageBitmap(o.blob), ySlider: o.ySlider, scale: o.scale };
   }));
+}
 
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-
-  // Black background
+// Вписывает источник в холст целиком, без обрезки (contain).
+function drawContain(ctx, src, sw, sh, width, height) {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, width, height);
+  const scale = Math.min(width / sw, height / sh);
+  const dw = Math.round(sw * scale);
+  const dh = Math.round(sh * scale);
+  ctx.drawImage(src, Math.round((width - dw) / 2), Math.round((height - dh) / 2), dw, dh);
+}
 
-  // Contain scaling
-  const scale = Math.min(width / imgBitmap.width, height / imgBitmap.height);
-  const dw = Math.round(imgBitmap.width * scale);
-  const dh = Math.round(imgBitmap.height * scale);
-  const dx = Math.round((width - dw) / 2);
-  const dy = Math.round((height - dh) / 2);
-  ctx.drawImage(imgBitmap, dx, dy, dw, dh);
-
+function drawOverlayBitmaps(ctx, overlayBitmaps, width, height) {
   for (const ov of overlayBitmaps) {
     if (!ov) continue;
     const tplScaleRatio = Math.min(width / ov.bitmap.width, height / ov.bitmap.height);
@@ -2118,11 +2198,20 @@ async function composeOverlayCanvas(imgFile, overlays, width, height) {
     const ow = Math.round(ov.bitmap.width * tplScaleRatio * userScale);
     const oh = Math.round(ov.bitmap.height * tplScaleRatio * userScale);
     const ox = Math.round((width - ow) / 2);
-
     const yCenterNorm = (1280 - ov.ySlider) / 1280;
     const oy = Math.round(yCenterNorm * height - (oh / 2));
     ctx.drawImage(ov.bitmap, ox, oy, ow, oh);
   }
+}
+
+async function composeOverlayCanvas(imgFile, overlays, width, height) {
+  const imgBitmap = await createImageBitmap(imgFile);
+  const overlayBitmaps = await loadOverlayBitmaps(overlays);
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  drawContain(ctx, imgBitmap, imgBitmap.width, imgBitmap.height, width, height);
+  drawOverlayBitmaps(ctx, overlayBitmaps, width, height);
 
   imgBitmap.close();
   overlayBitmaps.forEach(ov => ov && ov.bitmap.close());
@@ -2161,15 +2250,27 @@ async function pickVideoCodec(width, height) {
   return 'avc1.420028'; // last-resort — previously working Baseline Level 4.0
 }
 
-async function renderOneVideo(imgFile, overlays, audioBuf) {
+async function renderOneVideo(entry, overlays, audioBuf, onFrameProgress) {
   // Видео всегда 1080x1920 (9:16 вертикальный формат), независимо от того, под какое
-  // соотношение растянута исходная картинка на вкладке Upload 9:16 — contain-fit ниже
-  // просто впишет её внутрь этого холста без обрезки.
+  // соотношение растянут исходник на вкладке Upload — contain-fit просто впишет его внутрь
+  // этого холста без обрезки.
   const width = TARGET_W;
   const height = TARGET_H;
+  const isClip = !!entry.isVideo;
 
-  const canvas = await composeOverlayCanvas(imgFile, overlays, width, height);
-  const frameBitmap = canvas.transferToImageBitmap();
+  // Два поставщика кадров под общий кодирующий цикл ниже. Статика: один раз собрали холст и
+  // отдаём один и тот же битмап на каждый кадр. Видео: на каждый кадр перематываем исходник и
+  // пересобираем холст — источник зацикливается по модулю своей длительности.
+  let frameBitmap = null, clipVideo = null, clipCanvas = null, clipCtx = null, clipOverlays = null;
+  if (isClip) {
+    clipVideo = await loadVideoElement(entry.file);
+    clipCanvas = new OffscreenCanvas(width, height);
+    clipCtx = clipCanvas.getContext('2d');
+    clipOverlays = await loadOverlayBitmaps(overlays);
+  } else {
+    const canvas = await composeOverlayCanvas(entry.file, overlays, width, height);
+    frameBitmap = canvas.transferToImageBitmap();
+  }
 
   const muxerTarget = new Mp4Muxer.ArrayBufferTarget();
   const muxer = new Mp4Muxer.Muxer({
@@ -2229,22 +2330,38 @@ async function renderOneVideo(imgFile, overlays, audioBuf) {
   // 25fps/progressive, matching standard delivery specs instead of one giant held frame.
   const frameDurationUs = Math.round(1_000_000 / VIDEO_FRAME_RATE);
   const totalFrames = Math.max(1, Math.round((audioBuf.duration * 1_000_000) / frameDurationUs));
+  const clipDur = isClip && clipVideo.duration > 0 ? clipVideo.duration : 0;
   for (let i = 0; i < totalFrames; i++) {
     if (videoEncoderError) throw new Error(`Video encoding failed at frame ${i}/${totalFrames}: ${videoEncoderError.message || videoEncoderError}`);
     if (videoEncoder.encodeQueueSize > 30) {
       await new Promise(r => setTimeout(r, 10));
     }
-    const frame = new VideoFrame(frameBitmap, {
+
+    let source = frameBitmap;
+    if (isClip) {
+      // Зацикливание: исходник короче итогового ролика — крутим его по кругу; длиннее —
+      // обрежется сам собой, потому что кадров дальше totalFrames мы не запрашиваем.
+      await seekVideo(clipVideo, clipDur ? (i / VIDEO_FRAME_RATE) % clipDur : 0);
+      drawContain(clipCtx, clipVideo, clipVideo.videoWidth, clipVideo.videoHeight, width, height);
+      drawOverlayBitmaps(clipCtx, clipOverlays, width, height);
+      source = clipCanvas;
+    }
+
+    const frame = new VideoFrame(source, {
       timestamp: i * frameDurationUs,
       duration: frameDurationUs,
     });
     videoEncoder.encode(frame, { keyFrame: i % VIDEO_KEYFRAME_INTERVAL === 0 });
     frame.close();
+
+    if (isClip && i % 25 === 0) onFrameProgress && onFrameProgress(i, totalFrames);
   }
   await videoEncoder.flush();
   if (videoEncoderError) throw new Error(`Video encoding failed: ${videoEncoderError.message || videoEncoderError}`);
   videoEncoder.close();
-  frameBitmap.close();
+  if (frameBitmap) frameBitmap.close();
+  if (clipVideo) { URL.revokeObjectURL(clipVideo.src); clipVideo.src = ''; }
+  if (clipOverlays) clipOverlays.forEach(o => o && o.bitmap.close());
 
   muxer.finalize();
 
@@ -2333,7 +2450,9 @@ btnMerge.addEventListener('click', async () => {
       updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const img = images[i];
       const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
-      const mp4Blob = await renderOneVideo(img.file, overlays, mixedAudio);
+      const mp4Blob = await renderOneVideo(img, overlays, mixedAudio, (done, total) => {
+        updateProgress(`Rendering ${i + 1}/${images.length}: ${img.name} — кадр ${done}/${total}`, i + 1);
+      });
       const blobUrl = URL.createObjectURL(mp4Blob);
       outputFiles.push({
         name: `${images[i].name.replace(/\.[^.]+$/, '')}.mp4`,
@@ -2389,9 +2508,13 @@ btnRunImagesOnly.addEventListener('click', async () => {
   try {
     const { logoBlobFixed, discBlobFixed } = await resolveFixedOverlayBlobs();
 
+    let skippedClips = 0;
     for (let i = 0; i < images.length; i++) {
-      updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const img = images[i];
+      // Видео здесь пропускаем: этот режим отдаёт PNG, а у клипа нет одного «того самого» кадра.
+      // Для видео нужен обычный RUN, который соберёт mp4 со звуком.
+      if (img.isVideo) { skippedClips++; continue; }
+      updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
       const pngBlob = await renderOneImage(img.file, overlays, img.targetW || TARGET_W, img.targetH || TARGET_H);
       const blobUrl = URL.createObjectURL(pngBlob);
@@ -2404,7 +2527,7 @@ btnRunImagesOnly.addEventListener('click', async () => {
       });
     }
 
-    updateProgress(`Done — ${outputFiles.length} image(s) ready`, totalSteps);
+    updateProgress(`Done — ${outputFiles.length} image(s) ready` + (skippedClips ? `, видео пропущено: ${skippedClips} (для них нужен RUN)` : ''), totalSteps);
     barEl.className = 'progress-bar done';
     statusEl.className = 'status-bar';
     btnDownload.disabled = false;
@@ -2537,6 +2660,7 @@ function collectState() {
       targetW: i.targetW, targetH: i.targetH,
       logoYSlider: i.logoYSlider, logoScale: i.logoScale,
       discYSlider: i.discYSlider, discScale: i.discScale,
+      isVideo: i.isVideo, duration: i.duration,
       overlayTone: i.overlayTone, overlayBrightness: i.overlayBrightness,
       logoToneOverride: i.logoToneOverride, discToneOverride: i.discToneOverride,
       retryKind: i.retryKind, retrySourceUrl: i.retrySourceUrl, retrySourceFile: i.retrySourceFile,
@@ -2555,11 +2679,25 @@ async function restoreState(st) {
   if (st.mode) setImgMode(st.mode);
   if (st.ratio) { selectedUploadRatio = st.ratio; uploadRatioSelect.value = st.ratio; updateUploadRatioTitle(); }
 
-  (st.images || []).forEach(i => {
-    images.push(Object.assign({}, i, {
-      id: uid(), blobUrl: URL.createObjectURL(i.file), status: 'ready',
-    }));
-  });
+  // Постер видео не сохраняем — вместо этого пересобираем из самого файла: ImageBitmap не
+  // переживает structured clone, а blobUrl мёртв после перезагрузки. Для картинок blobUrl
+  // просто пересоздаётся из File, как и раньше.
+  for (const i of (st.images || [])) {
+    const entry = Object.assign({}, i, { id: uid(), status: 'ready' });
+    if (i.isVideo) {
+      try {
+        const poster = await extractPoster(i.file);
+        entry.blobUrl = URL.createObjectURL(poster.blob);
+        bitmapCache.set(i.file, await createImageBitmap(poster.blob));
+      } catch (e) {
+        console.error('video poster restore failed', e);
+        continue;   // битое видео молча пропускаем, а не роняем всё восстановление
+      }
+    } else {
+      entry.blobUrl = URL.createObjectURL(i.file);
+    }
+    images.push(entry);
+  }
   renderImages();
 
   if (st.voiceFile) setVoiceFile(st.voiceFile);
