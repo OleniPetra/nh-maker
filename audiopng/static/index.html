@@ -298,6 +298,30 @@ body {
   color: var(--accent-green);
 }
 
+/* Крестик снятия дорожки. Дропзона сама по клику открывает выбор файла, поэтому у кнопки
+   обязателен stopPropagation — иначе снятие тут же открывало бы диалог выбора нового файла. */
+.audio-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.62rem;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.audio-clear:hover { background: var(--accent-red); border-color: var(--accent-red); color: #fff; }
+.dropzone.loaded .audio-clear { display: flex; }
+
 .dropzone input[type=file] {
   display: none;
 }
@@ -1042,9 +1066,10 @@ body {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
         Voice
       </div>
-      <div class="audio-drop dropzone" id="voiceDrop" style="margin:0;padding:10px;font-size:0.7rem">
+      <div class="audio-drop dropzone" id="voiceDrop" style="margin:0;padding:10px;font-size:0.7rem;position:relative">
         <input type="file" id="voiceInput" accept="audio/*,video/*">
         <span id="voiceLabel">Voice / MP4</span>
+        <button type="button" class="audio-clear" id="voiceClear" title="Убрать дорожку">✕</button>
       </div>
       <div class="slider-group">
         <label>Vol</label>
@@ -1057,9 +1082,10 @@ body {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         Music
       </div>
-      <div class="audio-drop dropzone" id="musicDrop" style="margin:0;padding:10px;font-size:0.7rem">
+      <div class="audio-drop dropzone" id="musicDrop" style="margin:0;padding:10px;font-size:0.7rem;position:relative">
         <input type="file" id="musicInput" accept="audio/*,video/*">
         <span id="musicLabel">Music / MP4</span>
+        <button type="button" class="audio-clear" id="musicClear" title="Убрать дорожку">✕</button>
       </div>
       <div class="slider-group">
         <label>Vol</label>
@@ -1177,6 +1203,7 @@ const voiceVol = $('voiceVol');
 const musicDrop = $('musicDrop'); const musicInput = $('musicInput');
 const musicLabel = $('musicLabel');
 const musicOnlyDuration = $('musicOnlyDuration'), musicDurationInput = $('musicDurationInput');
+const voiceClear = $('voiceClear'), musicClear = $('musicClear');
 const musicVol = $('musicVol');
 const btnMerge = $('btnMerge'); const btnDownload = $('btnDownload');
 const btnRunImagesOnly = $('btnRunImagesOnly');
@@ -1666,6 +1693,31 @@ function setMusicFile(file) {
   updateDurationField();
   updateButtons();
 }
+
+function clearVoiceFile() {
+  voiceFile = null;
+  voiceLabel.textContent = 'Voice / MP4';
+  voiceDrop.classList.remove('loaded');
+  voiceInput.value = '';
+  updateDurationField();   // без голоса музыка становится единственной — появляется поле длительности
+  updateButtons();
+  persist();
+}
+
+function clearMusicFile() {
+  musicFile = null;
+  musicLabel.textContent = 'Music / MP4';
+  musicDrop.classList.remove('loaded');
+  musicInput.value = '';
+  updateDurationField();
+  updateButtons();
+  persist();
+}
+
+// stopPropagation обязателен: клик по дропзоне открывает выбор файла (см. setupDrop),
+// и без него снятие дорожки сразу же вызывало бы диалог выбора новой.
+voiceClear.addEventListener('click', e => { e.stopPropagation(); clearVoiceFile(); });
+musicClear.addEventListener('click', e => { e.stopPropagation(); clearMusicFile(); });
 
 musicDurationInput.addEventListener('input', () => {
   const v = parseFloat(musicDurationInput.value);
