@@ -388,6 +388,52 @@ body {
   filter: blur(6px);
 }
 
+.img-thumb.dragover {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.slide-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.slide-list {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.slide-sec-row {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slide-sec-row input {
+  width: 52px;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 .img-thumb .spinner-overlay {
   position: absolute;
   inset: 0;
@@ -1274,6 +1320,11 @@ function fitBox(targetW, targetH, maxW, maxH) {
 // surfaced anywhere in the UI text, so it doesn't read as a meaningful product limit.
 const MAX_IMAGES = 50;
 
+// Слайд-шоу внутри одного креатива: сколько доп. источников можно набросить на одну карточку,
+// и дефолт длительности показа картинки-слайда (у видео-слайда своя длительность, не отсюда).
+const MAX_SLIDES_PER_ENTRY = 20;
+const DEFAULT_SLIDE_SEC = 3;
+
 // ── local state ─────────────────────────────────────────────
 let images = [];        // { id, name, file, blobUrl, logoYSlider, logoScale, discYSlider, discScale }
 let voiceFile = null;
@@ -1556,6 +1607,49 @@ async function addImagesWithRatio(files) {
   return created;
 }
 
+// Только длительность, без превью/постера — используется для доп. слайдов слайд-шоу, где
+// собственная миниатюра слайда нигде не показывается (см. renderImages: бейдж "N slides").
+async function getVideoDuration(file) {
+  const v = await loadVideoElement(file);
+  const dur = Number.isFinite(v.duration) ? v.duration : 0;
+  URL.revokeObjectURL(v.src);
+  v.src = '';
+  return dur;
+}
+
+// Добавляет файлы КАК ДОПОЛНИТЕЛЬНЫЕ СЛАЙДЫ в уже существующую карточку (drag&drop прямо на
+// миниатюру в очереди), а не как новые отдельные креативы. При первом вызове на карточке
+// превращает её из одиночного источника в слайд-шоу: entry.slides[0] оборачивает то, что уже
+// было в entry.file/isVideo/duration, — это единственное место, где создаётся entry.slides;
+// весь остальной код (превью, тон, adjust-list, RUN IMAGE ONLY) продолжает читать entry.file
+// как раньше и не подозревает о слайд-шоу, пока entry.slides.length <= 1.
+async function appendSlidesToEntry(entryId, files) {
+  const entry = images.find(i => i.id === entryId);
+  if (!entry || entry.status !== 'ready' || !entry.file) return;
+  const list = Array.from(files).filter(f => f.type.startsWith('image/') || isVideoFile(f));
+  if (!list.length) return;
+
+  if (!entry.slides) {
+    entry.slides = [{ file: entry.file, isVideo: !!entry.isVideo, duration: entry.duration || null }];
+    entry.slideSec = entry.slideSec ?? DEFAULT_SLIDE_SEC;
+  }
+
+  for (const f of list) {
+    if (entry.slides.length >= MAX_SLIDES_PER_ENTRY) break;
+    if (isVideoFile(f)) {
+      try {
+        const duration = await getVideoDuration(f);
+        entry.slides.push({ file: f, isVideo: true, duration });
+      } catch (e) {
+        console.error('slide video load failed', e);
+      }
+    } else {
+      entry.slides.push({ file: f, isVideo: false, duration: null });
+    }
+  }
+  renderImages();
+}
+
 function removeImage(id) {
   const idx = images.findIndex(i => i.id === id);
   if (idx >= 0) {
@@ -1568,17 +1662,22 @@ function removeImage(id) {
 function renderImages() {
   imgQueue.innerHTML = images.map(img => {
     const { w: thumbW, h: thumbH } = fitBox(img.targetW || TARGET_W, img.targetH || TARGET_H, 92, 164);
+    const isSlideshow = img.slides && img.slides.length > 1;
+    const hasImageSlide = isSlideshow && img.slides.some(s => !s.isVideo);
     return `
     <div class="img-item${img.status === 'processing' ? ' processing' : ''}">
-      <div class="img-thumb" style="width:${thumbW}px;height:${thumbH}px">
+      <div class="img-thumb" data-id="${img.id}" style="width:${thumbW}px;height:${thumbH}px" title="Перетащи сюда ещё картинки/видео — добавятся как слайды в этот же креатив">
         <img src="${img.blobUrl}" loading="lazy" style="width:${thumbW}px;height:${thumbH}px">
         ${img.status === 'processing' ? '<div class="spinner-overlay"><div class="sc-spinner"></div></div>' : ''}
+        ${isSlideshow ? `<div class="slide-badge">🎞 ×${img.slides.length}</div>` : ''}
       </div>
       <div class="info">
         <span class="name">${esc(img.name)}</span>
         <span class="size">${img.status === 'processing' ? (img.statusLabel || 'Обработка…')
           : img.isVideo ? `MP4 · ${fmtDuration(img.duration)} · ${fmtSize(img.size)}`
           : fmtSize(img.size)}</span>
+        ${isSlideshow ? `<span class="slide-list" title="${esc(img.slides.map(s => s.file.name).join(', '))}">Слайд-шоу: ${img.slides.map(s => esc(s.file.name)).join(', ')}</span>` : ''}
+        ${hasImageSlide ? `<label class="slide-sec-row">сек/картинку <input type="number" class="slide-sec-input" data-id="${img.id}" min="0.2" max="30" step="0.1" value="${img.slideSec ?? DEFAULT_SLIDE_SEC}"></label>` : ''}
       </div>
       ${img.retryKind && img.status === 'ready' ? `<button class="retry" data-id="${img.id}" title="Повторить только аутпеинт">↻</button>` : ''}
       <button class="del" data-id="${img.id}">✕</button>
@@ -1591,6 +1690,29 @@ function renderImages() {
   });
   imgQueue.querySelectorAll('.retry').forEach(btn => {
     btn.addEventListener('click', () => retryOutpaint(btn.dataset.id));
+  });
+  imgQueue.querySelectorAll('.slide-sec-input').forEach(inp => {
+    inp.addEventListener('click', e => e.stopPropagation());
+    inp.addEventListener('input', () => {
+      const entry = images.find(i => i.id === inp.dataset.id);
+      if (!entry) return;
+      const v = parseFloat(inp.value);
+      entry.slideSec = Number.isFinite(v) && v > 0 ? v : DEFAULT_SLIDE_SEC;
+      persist();
+    });
+  });
+  // Дроп доп. файлов ПРЯМО на миниатюру уже загруженной карточки — добавляет их как слайды в
+  // тот же креатив (см. appendSlidesToEntry), а не как новые отдельные креативы, как это делает
+  // дропзона "Upload 9:16" выше. stopPropagation важен: иначе drop всплывёт до document и решит,
+  // что это обычная навигация браузером к файлу.
+  imgQueue.querySelectorAll('.img-thumb').forEach(el => {
+    el.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('dragover'); });
+    el.addEventListener('dragleave', e => { e.stopPropagation(); el.classList.remove('dragover'); });
+    el.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('dragover');
+      if (e.dataTransfer.files.length) appendSlidesToEntry(el.dataset.id, e.dataTransfer.files);
+    });
   });
   updateButtons();
   renderOverlayAdjustList('logo');
@@ -2302,19 +2424,140 @@ async function pickVideoCodec(width, height) {
   return 'avc1.420028'; // last-resort — previously working Baseline Level 4.0
 }
 
+// ── Слайд-шоу внутри одного креатива (несколько картинок/видео → один клип) ──
+// Тайминг: у видео-слайда есть собственная длительность, у картинки — нет, поэтому картинке
+// приписывается entry.slideSec (поле "сек/картинку" в очереди). Сумма длительностей всех
+// слайдов сравнивается с длиной аудио (audioDur, она же длина всего выходного ролика):
+//   - сумма <= audioDur  → слайды идут по кругу (loop) с их «естественной» длительностью,
+//     как обычное зацикливание видео-клипа, но по всей последовательности, а не по одному файлу;
+//   - сумма >  audioDur  → каждый слайд обрезается (не ускоряется) одним и тем же коэффициентом
+//     k = audioDur / сумма, так что обрезанные длины в сумме дают ровно audioDur, и всё
+//     проигрывается один раз без зацикливания.
+const FADE_DUR_SEC = 0.4;
+
+async function prepareSlideshow(entry, overlays, width, height, audioDur) {
+  const slides = entry.slides;
+  const natDur = slides.map(s => s.isVideo
+    ? Math.max(0.1, s.duration || 0.1)
+    : Math.max(0.1, entry.slideSec || DEFAULT_SLIDE_SEC));
+  const natTotal = natDur.reduce((a, b) => a + b, 0);
+  const loopMode = natTotal <= audioDur;
+  const scale = loopMode ? 1 : (audioDur / natTotal);
+  const effDur = natDur.map(d => d * scale); // "справедливая" доля времени на слайд, без нахлёста
+
+  // Переход слайд[i] → слайд[i+1] занимает fade[i] секунд У ОБОИХ: слайд i+1 начинает
+  // появляться на fade[i] раньше, чем закончился бы слайд i при простой склейке встык (starts[]
+  // ниже сдвинуты на эту величину). Без сдвига первые fade[i] секунд слайда i+1 показывались бы
+  // ДВАЖДЫ — один раз подмешанными в хвост слайда i, второй раз заново с нуля в его «сольной»
+  // части сразу после — именно это и давало эффект дублирования/дёрганья на стыках.
+  const fade = [];
+  for (let i = 0; i < slides.length - 1; i++) {
+    fade.push(Math.min(FADE_DUR_SEC, effDur[i] / 2, effDur[i + 1] / 2));
+  }
+
+  const starts = [0];
+  for (let i = 1; i < slides.length; i++) {
+    starts.push(starts[i - 1] + effDur[i - 1] - fade[i - 1]);
+  }
+  // Секунды, «одолженные» переходами у соседних слайдов, отдаём последнему слайду — иначе общая
+  // длина последовательности стала бы короче на сумму fade[], а она должна остаться ровно равна
+  // исходной сумме (natTotal при зацикливании, audioDur при обрезке).
+  const deficit = fade.reduce((a, b) => a + b, 0);
+  const adjEffDur = effDur.slice();
+  adjEffDur[adjEffDur.length - 1] += deficit;
+  const effTotal = starts[starts.length - 1] + adjEffDur[adjEffDur.length - 1];
+
+  // Источники кадров открываются один раз и переиспользуются на все кадры рендера (как и для
+  // одиночного видео-клипа выше) — перемотка/повторная отрисовка идёт по requested-времени,
+  // без пересоздания <video>/ImageBitmap на каждый вызов.
+  for (const s of slides) {
+    if (s.isVideo) s._videoEl = await loadVideoElement(s.file);
+    else s._bitmap = await createImageBitmap(s.file);
+  }
+
+  const overlayBitmaps = await loadOverlayBitmaps(overlays);
+  const mainCanvas = new OffscreenCanvas(width, height);
+  const mainCtx = mainCanvas.getContext('2d');
+  const fadeCanvas = new OffscreenCanvas(width, height);
+  const fadeCtx = fadeCanvas.getContext('2d');
+
+  return { slides, effDur: adjEffDur, fade, effTotal, loopMode, starts, overlayBitmaps, mainCanvas, mainCtx, fadeCanvas, fadeCtx, width, height };
+}
+
+function findSlideIndex(pos, starts, effDur) {
+  for (let j = 0; j < effDur.length; j++) {
+    if (pos < starts[j] + effDur[j]) return j;
+  }
+  return effDur.length - 1;
+}
+
+async function drawSlideAt(ctx, slide, localT, overlayBitmaps, width, height) {
+  if (slide.isVideo) {
+    const dur = slide._videoEl.duration || slide.duration || 0;
+    await seekVideo(slide._videoEl, dur > 0 ? Math.min(Math.max(localT, 0), dur - 0.001) : 0);
+    drawContain(ctx, slide._videoEl, slide._videoEl.videoWidth, slide._videoEl.videoHeight, width, height);
+  } else {
+    drawContain(ctx, slide._bitmap, slide._bitmap.width, slide._bitmap.height, width, height);
+  }
+  drawOverlayBitmaps(ctx, overlayBitmaps, width, height);
+}
+
+// Кадр на момент t (секунды от начала ролика). Возвращает канвас — уже с лого/дисклеймером —
+// готовый как источник для VideoFrame. Переход между слайдом idx и idx+1 — кроссфейд
+// длительностью fade[idx]: последние fade[idx] секунд занятого слайдом idx интервала [starts[idx],
+// starts[idx]+effDur[idx]) ОДНОВРЕМЕННО показывают начало (0..fade[idx]) слайда idx+1, подмешанное
+// сверху с растущей прозрачностью — а не отдельно поверх; сразу после эта же точка становится
+// локальным временем fade[idx] для слайда idx+1 (см. starts[] в prepareSlideshow), так что его
+// «сольная» часть продолжает воспроизведение оттуда же, а не с нуля — повтора первых кадров нет.
+// Шов цикла (последний слайд → первый при зацикливании) — жёсткая склейка без фейда.
+async function drawSlideshowFrame(sc, t) {
+  const { slides, effDur, fade, effTotal, loopMode, starts, overlayBitmaps, mainCanvas, mainCtx, fadeCanvas, fadeCtx, width, height } = sc;
+  const pos = loopMode ? (effTotal > 0 ? t % effTotal : 0) : Math.min(t, effTotal - 1e-6);
+  const idx = findSlideIndex(pos, starts, effDur);
+  const localT = pos - starts[idx];
+  const hasNext = idx < slides.length - 1;
+  const fadeWindow = hasNext ? fade[idx] : 0;
+
+  await drawSlideAt(mainCtx, slides[idx], localT, overlayBitmaps, width, height);
+
+  if (hasNext && fadeWindow > 0 && localT >= effDur[idx] - fadeWindow) {
+    const fadeStart = effDur[idx] - fadeWindow;
+    const alpha = Math.max(0, Math.min(1, (localT - fadeStart) / fadeWindow));
+    await drawSlideAt(fadeCtx, slides[idx + 1], localT - fadeStart, overlayBitmaps, width, height);
+    mainCtx.globalAlpha = alpha;
+    mainCtx.drawImage(fadeCanvas, 0, 0);
+    mainCtx.globalAlpha = 1;
+  }
+
+  return mainCanvas;
+}
+
+function cleanupSlideshow(sc) {
+  for (const s of sc.slides) {
+    if (s._videoEl) { URL.revokeObjectURL(s._videoEl.src); s._videoEl.src = ''; s._videoEl = null; }
+    if (s._bitmap) { s._bitmap.close(); s._bitmap = null; }
+  }
+  sc.overlayBitmaps.forEach(o => o && o.bitmap.close());
+}
+
 async function renderOneVideo(entry, overlays, audioBuf, onFrameProgress) {
   // Видео всегда 1080x1920 (9:16 вертикальный формат), независимо от того, под какое
   // соотношение растянут исходник на вкладке Upload — contain-fit просто впишет его внутрь
   // этого холста без обрезки.
   const width = TARGET_W;
   const height = TARGET_H;
-  const isClip = !!entry.isVideo;
+  const isSlideshow = Array.isArray(entry.slides) && entry.slides.length > 1;
+  const isClip = !isSlideshow && !!entry.isVideo;
 
-  // Два поставщика кадров под общий кодирующий цикл ниже. Статика: один раз собрали холст и
+  // Три поставщика кадров под общий кодирующий цикл ниже. Статика: один раз собрали холст и
   // отдаём один и тот же битмап на каждый кадр. Видео: на каждый кадр перематываем исходник и
-  // пересобираем холст — источник зацикливается по модулю своей длительности.
-  let frameBitmap = null, clipVideo = null, clipCanvas = null, clipCtx = null, clipOverlays = null;
-  if (isClip) {
+  // пересобираем холст — источник зацикливается по модулю своей длительности. Слайд-шоу: см.
+  // prepareSlideshow/drawSlideshowFrame — свой тайминг (цикл или пропорциональная обрезка) и
+  // кроссфейд между слайдами.
+  let frameBitmap = null, clipVideo = null, clipCanvas = null, clipCtx = null, clipOverlays = null, slideshowCtx = null;
+  if (isSlideshow) {
+    slideshowCtx = await prepareSlideshow(entry, overlays, width, height, audioBuf.duration);
+  } else if (isClip) {
     clipVideo = await loadVideoElement(entry.file);
     clipCanvas = new OffscreenCanvas(width, height);
     clipCtx = clipCanvas.getContext('2d');
@@ -2390,7 +2633,9 @@ async function renderOneVideo(entry, overlays, audioBuf, onFrameProgress) {
     }
 
     let source = frameBitmap;
-    if (isClip) {
+    if (isSlideshow) {
+      source = await drawSlideshowFrame(slideshowCtx, i / VIDEO_FRAME_RATE);
+    } else if (isClip) {
       // Зацикливание: исходник короче итогового ролика — крутим его по кругу; длиннее —
       // обрежется сам собой, потому что кадров дальше totalFrames мы не запрашиваем.
       await seekVideo(clipVideo, clipDur ? (i / VIDEO_FRAME_RATE) % clipDur : 0);
@@ -2406,7 +2651,7 @@ async function renderOneVideo(entry, overlays, audioBuf, onFrameProgress) {
     videoEncoder.encode(frame, { keyFrame: i % VIDEO_KEYFRAME_INTERVAL === 0 });
     frame.close();
 
-    if (isClip && i % 25 === 0) onFrameProgress && onFrameProgress(i, totalFrames);
+    if ((isClip || isSlideshow) && i % 25 === 0) onFrameProgress && onFrameProgress(i, totalFrames);
   }
   await videoEncoder.flush();
   if (videoEncoderError) throw new Error(`Video encoding failed: ${videoEncoderError.message || videoEncoderError}`);
@@ -2414,6 +2659,7 @@ async function renderOneVideo(entry, overlays, audioBuf, onFrameProgress) {
   if (frameBitmap) frameBitmap.close();
   if (clipVideo) { URL.revokeObjectURL(clipVideo.src); clipVideo.src = ''; }
   if (clipOverlays) clipOverlays.forEach(o => o && o.bitmap.close());
+  if (slideshowCtx) cleanupSlideshow(slideshowCtx);
 
   muxer.finalize();
 
@@ -2563,9 +2809,9 @@ btnRunImagesOnly.addEventListener('click', async () => {
     let skippedClips = 0;
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
-      // Видео здесь пропускаем: этот режим отдаёт PNG, а у клипа нет одного «того самого» кадра.
-      // Для видео нужен обычный RUN, который соберёт mp4 со звуком.
-      if (img.isVideo) { skippedClips++; continue; }
+      // Видео и слайд-шоу здесь пропускаем: этот режим отдаёт один PNG, а у них нет одного
+      // «того самого» кадра. Для них нужен обычный RUN, который соберёт mp4 со звуком.
+      if (img.isVideo || (img.slides && img.slides.length > 1)) { skippedClips++; continue; }
       updateProgress(`Rendering ${i + 1}/${images.length}: ${images[i].name}`, i + 1);
       const overlays = await resolveOverlaysForImage(img, logoBlobFixed, discBlobFixed);
       const pngBlob = await renderOneImage(img.file, overlays, img.targetW || TARGET_W, img.targetH || TARGET_H);
@@ -2579,7 +2825,7 @@ btnRunImagesOnly.addEventListener('click', async () => {
       });
     }
 
-    updateProgress(`Done — ${outputFiles.length} image(s) ready` + (skippedClips ? `, видео пропущено: ${skippedClips} (для них нужен RUN)` : ''), totalSteps);
+    updateProgress(`Done — ${outputFiles.length} image(s) ready` + (skippedClips ? `, видео/слайд-шоу пропущено: ${skippedClips} (для них нужен RUN)` : ''), totalSteps);
     barEl.className = 'progress-bar done';
     statusEl.className = 'status-bar';
     btnDownload.disabled = false;
@@ -2716,6 +2962,12 @@ function collectState() {
       overlayTone: i.overlayTone, overlayBrightness: i.overlayBrightness,
       logoToneOverride: i.logoToneOverride, discToneOverride: i.discToneOverride,
       retryKind: i.retryKind, retrySourceUrl: i.retrySourceUrl, retrySourceFile: i.retrySourceFile,
+      // Слайд-шоу: только file/isVideo/duration на слайд — служебные _videoEl/_bitmap,
+      // которые появляются на слайдах во время рендера (см. prepareSlideshow), сюда не попадают.
+      slides: (i.slides && i.slides.length > 1)
+        ? i.slides.map(s => ({ file: s.file, isVideo: s.isVideo, duration: s.duration }))
+        : undefined,
+      slideSec: i.slideSec,
     })),
     logoTpl: overlayState.logo.selectedTemplateId,
     discTpl: overlayState.disclaimer.selectedTemplateId,
